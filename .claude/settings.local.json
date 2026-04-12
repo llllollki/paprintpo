@@ -5,7 +5,8 @@
       "Bash(node:*)",
       "Bash(grep -r \"CookieOptionsWithName\\\\|setAll\" node_modules/@supabase/ssr/dist/main/*.d.ts)",
       "Bash(grep -v \"//\")",
-      "Bash(grep -rn \"StripeConfig\\\\|apiVersion\" node_modules/stripe/types/index.d.ts node_modules/stripe/types/lib/*.d.ts)"
+      "Bash(grep -rn \"StripeConfig\\\\|apiVersion\" node_modules/stripe/types/index.d.ts node_modules/stripe/types/lib/*.d.ts)",
+      "Bash(npm install:*)"
     ]
   }
 }

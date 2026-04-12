@@ -62,10 +62,11 @@ export function calculatePrice(input: PricingInput): PricingResult {
 
   const tierApplied = applicableTiers[0] ?? null;
 
-  // If a tier exists it overrides the adjusted base entirely;
-  // the tier's unitPrice already accounts for volume discount.
-  // If no tier applies, fall back to adjustedBase.
-  const unitPrice = tierApplied ? tierApplied.unitPrice : adjustedBase;
+  // Tier sets the volume unit price; option modifiers still stack on top.
+  // If no tier applies, fall back to adjustedBase (basePrice + options).
+  const unitPrice = tierApplied
+    ? tierApplied.unitPrice + optionTotal
+    : adjustedBase;
   const lineTotal = unitPrice * quantity;
 
   return { unitPrice, lineTotal, tierApplied };

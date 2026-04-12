@@ -63,6 +63,48 @@ Key decisions:
 - `subtotal_cents` + `total_cents` both on orders — subtotal is sum of line totals; total is final charged amount
 - `QuantityTier` type is now canonical in the schema; `lib/pricing.ts` imports and re-exports it
 
-## Phase 3 (next)
-- Implement Supabase auth in middleware
-- Build product listing page and configurator
+## 2026-04-12 — Phase 3: Storefront foundations
+
+### Pricing engine fix — option modifiers now stack on tier price
+**Before:** `unitPrice = tierApplied ? tierApplied.unitPrice : adjustedBase`
+**After:** `unitPrice = tierApplied ? tierApplied.unitPrice + optionTotal : adjustedBase`
+**Why:** Tier prices represent the volume-discount unit rate. Option modifiers (rush
+surcharge, gloss finish, double-sided) are per-unit add-ons that apply regardless of
+volume. Dropping them when a tier applies produced wrong prices as soon as any
+option had a non-zero modifier. Scoped change: one line in `lib/pricing.ts`.
+
+### Seed catalog — `scripts/seed.ts`
+Three products seeded: Standard Business Card, Half-Page Flyer, Die-Cut Sticker.
+Each has 2–3 option groups and 3–4 quantity tiers. Idempotent (delete by slug,
+then re-insert). Run via `npm run seed` (requires `DATABASE_URL` in `.env.local`).
+
+### Query layer — `lib/db/queries.ts`
+Five typed functions: `getProducts`, `getProductsByCategory`, `getProductBySlug`,
+`getProductOptions`, `getQuantityTiers`. All reads go through here; pages do not
+instantiate `db` directly.
+
+### Pages added/updated
+- `/products` — catalog listing grouped by category, server component
+- `/products/[category]` — filtered listing, 404s if category has no active products
+- `/products/[category]/[slug]` — product detail; server component fetches and passes
+  data to `ProductConfigurator` (client component) for interactive state
+
+### Components added/updated
+- `ProductCard` — upgraded to Next.js `Link`, typed against `Product` from schema, uses `formatCents`
+- `OptionSelector` — renamed `ProductOption` UI type to `OptionGroup` (avoid name clash
+  with DB-layer `ProductOption`); added `toLabel` helper for display; option modifier
+  delta shown inline in each `<option>`
+- `ProductConfigurator` (new) — client component owning `selected`, `quantity`, and
+  live `calculatePrice` call; transforms flat DB option rows into `OptionGroup[]`;
+  renders `OptionSelector`, quantity input, live price display, `FileUploader` placeholder,
+  and disabled Add to Cart button
+
+### Placeholder / not wired
+- `FileUploader` — renders as-is; no presign API call; note tells user upload is at checkout
+- Add to Cart button — disabled, no cart state
+- Auth, Stripe, webhooks, admin — not touched
+
+## Phase 4 (next)
+- Implement Supabase auth + middleware guard for /admin
+- Build cart state (context or Zustand)
+- Wire Stripe Checkout
