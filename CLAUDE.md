@@ -60,9 +60,17 @@ Likely configurable attributes:
 - Relevant docs updated
 - Files changed and rationale summarized
 
+## Pricing architecture (refinement decisions)
+- **Quantity tiers are first-class**: `quantity_tiers` is its own table linked to products, not a flat multiplier. See `lib/pricing.ts`.
+- **Pricing is separate from options**: `lib/pricing.ts` owns calculation logic; `OptionSelector` owns display. Pricing rules can be moved to DB or an API without touching option components.
+- **Order statuses support artwork/proof workflow**: `pending → paid → artwork_review → proof_sent → proof_approved → in_production → shipped → complete`. Also: `payment_failed`, `cancelled`.
+
 ## Current priorities
-1. Choose stack
-2. Scaffold storefront
-3. Create product model for printable goods
-4. Define upload and customization flow
-5. Prepare checkout architecture
+1. ~~Choose stack~~ Done — Next.js 15, Supabase, Drizzle, Stripe, Tailwind + shadcn
+2. ~~Scaffold storefront~~ Done — Phase 1 complete
+3. Define Drizzle schema (products, options, quantity_tiers, pricing_rules, orders, order_items, order_files)
+4. Implement Supabase auth + middleware
+5. Build product listing and configurator
+6. Implement file upload flow
+7. Wire Stripe Checkout + webhook
+8. Build /admin order workflow
