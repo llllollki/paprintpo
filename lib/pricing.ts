@@ -13,6 +13,12 @@
 // Types
 // ---------------------------------------------------------------------------
 
+// QuantityTier shape is now canonical in the DB schema.
+// Imported for use in this file and re-exported so callers don't need to
+// import from two places.
+import type { QuantityTier } from "./db/schema";
+export type { QuantityTier };
+
 export interface SelectedOptions {
   size?: string;
   finish?: string;
@@ -20,13 +26,6 @@ export interface SelectedOptions {
   sides?: string;
   turnaround?: string;
   [key: string]: string | undefined;
-}
-
-// A single quantity tier: buy at least `minQty` to get `unitPrice` per unit.
-// Refinement #1: quantity tiers are first-class, not a flat multiplier.
-export interface QuantityTier {
-  minQty: number;    // e.g. 100
-  unitPrice: number; // cents per unit at this tier
 }
 
 export interface PricingInput {

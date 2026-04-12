@@ -46,7 +46,23 @@ touching UI components. It also makes pricing logic unit-testable in isolation.
 - `.env.example` — all required environment variables documented
 - `drizzle.config.ts` — Drizzle Kit configuration
 
-## Phase 2 (next)
-- Write full Drizzle schema: products, product_options, quantity_tiers, orders, order_items, order_files
+## 2026-04-11 — Phase 2 Drizzle schema
+
+Tables defined in `lib/db/schema.ts`:
+- `products` — catalog with slug, category, base_price (cents), active flag
+- `product_options` — one row per selectable value; grouped by group_name; price_modifier in cents
+- `quantity_tiers` — volume pricing per product; resolution logic in `lib/pricing.ts`
+- `orders` — customer email/name, status (text + check constraint), subtotal_cents + total_cents, Stripe fields
+- `order_items` — snapshot fields (product_name_snapshot, options_snapshot jsonb) preserve purchase record; product_id nullable FK
+- `order_files` — Supabase Storage paths only; per-item artwork tracking with status
+
+Key decisions:
+- `order_items.product_id` is nullable (SET NULL on delete) — snapshot is source of truth
+- `options_snapshot` is jsonb — avoids a join table and schema churn as option groups evolve
+- Order/file status is text + check constraint — adding a status never requires a migration
+- `subtotal_cents` + `total_cents` both on orders — subtotal is sum of line totals; total is final charged amount
+- `QuantityTier` type is now canonical in the schema; `lib/pricing.ts` imports and re-exports it
+
+## Phase 3 (next)
 - Implement Supabase auth in middleware
-- Build product listing page
+- Build product listing page and configurator
