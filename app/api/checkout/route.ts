@@ -144,29 +144,43 @@ export async function POST(request: NextRequest) {
     }))
   );
 
-  // 5. Create Stripe Checkout Session
+  // 5. Create Stripe Checkout Session.
+  // If Stripe throws, mark the order cancelled so it does not sit as a stray
+  // pending row. The order_items are preserved for debugging.
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
-  const session = await stripe.checkout.sessions.create({
-    mode: "payment",
-    customer_email: customerEmail,
-    metadata: { orderId: order.id },
-    line_items: revalidatedItems.map((item) => ({
-      price_data: {
-        currency: "usd",
-        unit_amount: item.unitPriceCents,
-        product_data: {
-          name: item.productNameSnapshot,
-          description: Object.entries(item.optionLabels)
-            .map(([g, l]) => `${g}: ${l}`)
-            .join(", ") || undefined,
+  let session: Awaited<ReturnType<typeof stripe.checkout.sessions.create>>;
+  try {
+    session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      customer_email: customerEmail,
+      metadata: { orderId: order.id },
+      line_items: revalidatedItems.map((item) => ({
+        price_data: {
+          currency: "usd",
+          unit_amount: item.unitPriceCents,
+          product_data: {
+            name: item.productNameSnapshot,
+            description: Object.entries(item.optionLabels)
+              .map(([g, l]) => `${g}: ${l}`)
+              .join(", ") || undefined,
+          },
         },
-      },
-      quantity: item.quantity,
-    })),
-    success_url: `${baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${baseUrl}/cart`,
-  });
+        quantity: item.quantity,
+      })),
+      success_url: `${baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}/cart`,
+    });
+  } catch {
+    await db
+      .update(orders)
+      .set({ status: "cancelled" })
+      .where(eq(orders.id, order.id));
+    return NextResponse.json(
+      { error: "Payment provider unavailable. Please try again." },
+      { status: 502 }
+    );
+  }
 
   // 6. Store Stripe session ID on the order
   await db
