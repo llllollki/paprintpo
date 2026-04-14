@@ -108,7 +108,7 @@ function reducer(state: CartItem[], action: Action): CartItem[] {
 // Context
 // ---------------------------------------------------------------------------
 
-const STORAGE_KEY = "print_cart";
+export const STORAGE_KEY = "print_cart";
 
 const CartContext = createContext<CartContextValue | null>(null);
 
