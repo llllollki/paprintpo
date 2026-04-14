@@ -2,9 +2,9 @@
 // Each function is typed against the inferred Drizzle row types from schema.ts.
 
 import { db } from "./index";
-import { products, productOptions, quantityTiers } from "./schema";
-import type { Product, ProductOption, QuantityTier } from "./schema";
-import { eq, and } from "drizzle-orm";
+import { products, productOptions, quantityTiers, orders, orderItems } from "./schema";
+import type { Product, ProductOption, QuantityTier, Order, OrderItem } from "./schema";
+import { eq, and, desc } from "drizzle-orm";
 
 export async function getProducts(): Promise<Product[]> {
   return db
@@ -51,4 +51,27 @@ export async function getQuantityTiers(
     .from(quantityTiers)
     .where(eq(quantityTiers.productId, productId))
     .orderBy(quantityTiers.minQty);
+}
+
+// ---------------------------------------------------------------------------
+// Admin queries
+// ---------------------------------------------------------------------------
+
+export async function getOrders(): Promise<Order[]> {
+  return db.select().from(orders).orderBy(desc(orders.createdAt));
+}
+
+export async function getOrderWithItems(
+  id: string
+): Promise<{ order: Order; items: OrderItem[] } | null> {
+  const rows = await db.select().from(orders).where(eq(orders.id, id)).limit(1);
+  const order = rows[0] ?? null;
+  if (!order) return null;
+
+  const items = await db
+    .select()
+    .from(orderItems)
+    .where(eq(orderItems.orderId, id));
+
+  return { order, items };
 }

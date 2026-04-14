@@ -54,6 +54,24 @@ export async function POST(request: NextRequest) {
       break;
     }
 
+    case "checkout.session.expired": {
+      const session = event.data.object as Stripe.Checkout.Session;
+      const orderId = session.metadata?.orderId;
+
+      if (!orderId) {
+        break;
+      }
+
+      // Only move to cancelled if the order is still pending — a completed
+      // session fires completed before expired, so this guards against a race.
+      await db
+        .update(orders)
+        .set({ status: "cancelled" })
+        .where(eq(orders.id, orderId));
+
+      break;
+    }
+
     case "payment_intent.payment_failed": {
       const intent = event.data.object as Stripe.PaymentIntent;
 
