@@ -104,7 +104,48 @@ instantiate `db` directly.
 - Add to Cart button — disabled, no cart state
 - Auth, Stripe, webhooks, admin — not touched
 
-## Phase 4 (next)
+## 2026-04-13 — Phase 4: Cart foundations
+
+### Cart item shape — `lib/cart.ts`
+`CartItem` stores display fields (productName, optionLabels, quantity, prices) and
+repricing fields (basePrice, optionModifiers, tiers). The repricing fields are frozen
+at add-to-cart time so the cart page can recalculate price without any DB fetch.
+
+### Repricing on quantity change
+`updateQuantity` in the reducer calls `calculatePrice` with the stored basePrice,
+optionModifiers, and tiers. If the new quantity crosses a tier threshold (e.g. from
+99 to 100 units), unitPriceCents updates to the tier rate automatically.
+`lineTotalCents` is always `unitPriceCents × quantity`.
+
+### Persistence — localStorage
+CartItems are serialized to `localStorage` under `"print_cart"` on every dispatch.
+On mount, the CartProvider reads and hydrates. `hydrated: boolean` is exposed in
+context so the cart page can avoid rendering stale empty-state before hydration.
+
+### lib/pricing.ts — TierInput structural type
+`PricingInput.quantityTiers` relaxed from `QuantityTier[]` (full DB row) to
+`TierInput[]` (`{ minQty, unitPrice }[]`). Backward-compatible: QuantityTier still
+satisfies TierInput. Allows CartTier (slim store type) to be passed without casting.
+
+### Files added/updated
+- `lib/cart.ts` — CartItem type, CartTier, CartProvider (createElement, no JSX),
+  useCart hook, useReducer + localStorage sync
+- `lib/pricing.ts` — TierInput type, relaxed PricingInput.quantityTiers
+- `components/layout/StoreNav.tsx` (new) — sticky nav, cart count badge, owns
+  CartDrawer open/close state
+- `components/cart/CartDrawer.tsx` — real: item list, subtotal, View Cart link
+- `app/(store)/layout.tsx` — wraps CartProvider + StoreNav
+- `components/product/ProductConfigurator.tsx` — Add to Cart wired; builds
+  CartItem from current selection; "Added to cart!" 2s feedback; button disabled
+  until all option groups selected
+- `app/(store)/cart/page.tsx` — real: line items, option labels, editable quantity
+  (onBlur commits + reprices), remove button, subtotal; disabled checkout placeholder
+
+### Placeholder / not wired
+- Checkout button on /cart — disabled, Stripe not wired
+- File upload — no change
+
+## Phase 5 (next)
 - Implement Supabase auth + middleware guard for /admin
-- Build cart state (context or Zustand)
-- Wire Stripe Checkout
+- Wire Stripe Checkout + webhook
+- Build admin order workflow

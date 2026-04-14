@@ -28,17 +28,23 @@ export interface SelectedOptions {
   [key: string]: string | undefined;
 }
 
+// Structural tier shape — QuantityTier (DB row) and CartTier (cart store) both satisfy this.
+export interface TierInput {
+  minQty: number;
+  unitPrice: number;
+}
+
 export interface PricingInput {
   basePrice: number;           // product base price in cents
   optionModifiers: number[];   // cents delta per selected option (from product_options.values)
-  quantityTiers: QuantityTier[];
+  quantityTiers: TierInput[];
   quantity: number;
 }
 
 export interface PricingResult {
-  unitPrice: number;   // cents — base + option modifiers, at the resolved tier
-  lineTotal: number;   // cents — unitPrice × quantity
-  tierApplied: QuantityTier | null;
+  unitPrice: number;        // cents — base + option modifiers, at the resolved tier
+  lineTotal: number;        // cents — unitPrice × quantity
+  tierApplied: TierInput | null;
 }
 
 // ---------------------------------------------------------------------------

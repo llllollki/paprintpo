@@ -10,6 +10,7 @@
 
 import { useState, useMemo } from "react";
 import { calculatePrice, formatCents } from "@/lib/pricing";
+import { useCart } from "@/lib/cart";
 import { OptionSelector } from "./OptionSelector";
 import { FileUploader } from "./FileUploader";
 import type { OptionGroup } from "./OptionSelector";
@@ -19,10 +20,8 @@ import type { Product, ProductOption, QuantityTier } from "@/lib/db/schema";
 // Helpers
 // ---------------------------------------------------------------------------
 
-// Transform flat DB option rows into OptionGroup[] for OptionSelector.
 function toOptionGroups(options: ProductOption[]): OptionGroup[] {
   const groupMap = new Map<string, OptionGroup>();
-
   for (const opt of options) {
     if (!groupMap.has(opt.groupName)) {
       groupMap.set(opt.groupName, {
@@ -38,8 +37,21 @@ function toOptionGroups(options: ProductOption[]): OptionGroup[] {
       priceModifier: opt.priceModifier,
     });
   }
-
   return Array.from(groupMap.values());
+}
+
+// Build a groupName → display label map for the current selection.
+function buildOptionLabels(
+  options: ProductOption[],
+  selected: Record<string, string>
+): Record<string, string> {
+  const labels: Record<string, string> = {};
+  for (const opt of options) {
+    if (selected[opt.groupName] === opt.value) {
+      labels[opt.groupName] = opt.label;
+    }
+  }
+  return labels;
 }
 
 // ---------------------------------------------------------------------------
@@ -53,14 +65,15 @@ interface Props {
 }
 
 export function ProductConfigurator({ product, options, tiers }: Props) {
+  const { addItem } = useCart();
   const optionGroups = useMemo(() => toOptionGroups(options), [options]);
 
   const minQty = tiers.length > 0 ? Math.min(...tiers.map((t) => t.minQty)) : 1;
 
   const [selected, setSelected] = useState<Record<string, string>>({});
   const [quantity, setQuantity] = useState(minQty);
+  const [added, setAdded] = useState(false);
 
-  // Collect price modifiers for all currently selected options.
   const optionModifiers = options
     .filter((o) => selected[o.groupName] === o.value)
     .map((o) => o.priceModifier);
@@ -73,7 +86,7 @@ export function ProductConfigurator({ product, options, tiers }: Props) {
   });
 
   const allGroupsSelected =
-    optionGroups.length > 0 &&
+    optionGroups.length === 0 ||
     optionGroups.every((g) => selected[g.name] !== undefined);
 
   function handleOptionChange(groupName: string, value: string) {
@@ -83,6 +96,29 @@ export function ProductConfigurator({ product, options, tiers }: Props) {
   function handleQuantityChange(e: React.ChangeEvent<HTMLInputElement>) {
     const val = parseInt(e.target.value, 10);
     setQuantity(isNaN(val) ? minQty : Math.max(minQty, val));
+  }
+
+  function handleAddToCart() {
+    if (!allGroupsSelected) return;
+
+    addItem({
+      productId: product.id,
+      productName: product.name,
+      category: product.category,
+      slug: product.slug,
+      selectedOptions: selected,
+      optionLabels: buildOptionLabels(options, selected),
+      quantity,
+      unitPriceCents: pricing.unitPrice,
+      lineTotalCents: pricing.lineTotal,
+      minQty,
+      basePrice: product.basePrice,
+      optionModifiers,
+      tiers: tiers.map((t) => ({ minQty: t.minQty, unitPrice: t.unitPrice })),
+    });
+
+    setAdded(true);
+    setTimeout(() => setAdded(false), 2000);
   }
 
   return (
@@ -144,13 +180,23 @@ export function ProductConfigurator({ product, options, tiers }: Props) {
         </p>
       </div>
 
-      {/* Add to cart — placeholder */}
+      {/* Add to Cart */}
       <button
-        disabled
-        className="w-full rounded bg-gray-900 px-4 py-3 text-sm font-semibold text-white opacity-40 cursor-not-allowed"
-        title={!allGroupsSelected ? "Select all options first" : "Coming soon"}
+        onClick={handleAddToCart}
+        disabled={!allGroupsSelected || added}
+        className={`w-full rounded px-4 py-3 text-sm font-semibold text-white transition-colors ${
+          added
+            ? "bg-green-700 cursor-default"
+            : allGroupsSelected
+            ? "bg-gray-900 hover:bg-gray-700"
+            : "bg-gray-900 opacity-40 cursor-not-allowed"
+        }`}
       >
-        Add to Cart — coming soon
+        {added
+          ? "Added to cart!"
+          : !allGroupsSelected
+          ? "Select all options to continue"
+          : "Add to Cart"}
       </button>
     </div>
   );
