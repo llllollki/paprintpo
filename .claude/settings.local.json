@@ -10,7 +10,8 @@
       "Bash(ls:*)",
       "Bash(npx drizzle-kit:*)",
       "Bash(npm run:*)",
-      "Bash(echo \"---EXIT:$?\")"
+      "Bash(echo \"---EXIT:$?\")",
+      "Bash(echo \"EXIT:$?\")"
     ]
   }
 }
