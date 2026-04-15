@@ -37,10 +37,20 @@ const CartItemSchema = z.object({
   id: z.string(),
 });
 
+const ShippingAddressSchema = z.object({
+  line1:      z.string().min(1, "Address is required"),
+  line2:      z.string().optional().default(""),
+  city:       z.string().min(1, "City is required"),
+  state:      z.string().min(1, "State / region is required"),
+  postalCode: z.string().min(1, "Postal code is required"),
+  country:    z.string().min(1, "Country is required"),
+});
+
 const CheckoutBodySchema = z.object({
-  customerName: z.string().min(1, "Full name is required"),
-  customerEmail: z.string().email("Valid email is required"),
-  items: z.array(CartItemSchema).min(1, "Cart is empty"),
+  customerName:    z.string().min(1, "Full name is required"),
+  customerEmail:   z.string().email("Valid email is required"),
+  shippingAddress: ShippingAddressSchema,
+  items:           z.array(CartItemSchema).min(1, "Cart is empty"),
 });
 
 // ---------------------------------------------------------------------------
@@ -64,7 +74,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { customerName, customerEmail, items } = parsed.data;
+  const { customerName, customerEmail, shippingAddress, items } = parsed.data;
 
   // 2. Re-derive pricing server-side for every cart item
   const revalidatedItems = await Promise.all(
@@ -128,6 +138,7 @@ export async function POST(request: NextRequest) {
       status: "pending",
       subtotalCents,
       totalCents,
+      shippingAddress,
     })
     .returning();
 

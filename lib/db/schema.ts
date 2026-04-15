@@ -130,6 +130,8 @@ export const ORDER_STATUSES = [
   "proof_sent",
   "proof_approved",
   "in_production",
+  "submitted_to_vendor",
+  "fulfillment_failed",
   "shipped",
   "complete",
   "payment_failed",
@@ -152,6 +154,27 @@ export const orders = pgTable(
     stripePaymentIntent: text("stripe_payment_intent"),
     subtotalCents: integer("subtotal_cents").notNull(), // sum of line totals before any fees/tax
     totalCents: integer("total_cents").notNull(),       // final charged amount
+    shippingAddress: jsonb("shipping_address").$type<{
+      line1: string;
+      line2?: string;
+      city: string;
+      state: string;
+      postalCode: string;
+      country: string;
+    }>(),
+    fulfillmentRecommendation: jsonb("fulfillment_recommendation").$type<{
+      quoteId: string;
+      vendorId: string;
+      quotedCents: number;
+      shippingCents: number;
+      marginCents: number;
+      turnaroundDays?: number;
+    }>(),
+    fulfillmentSelection: jsonb("fulfillment_selection").$type<{
+      vendorId: string;
+      quoteId: string;
+      isOverride: boolean;
+    }>(),
     notes: text("notes"),
     ...timestamps,
   },
@@ -227,6 +250,112 @@ export const orderFiles = pgTable("order_files", {
 });
 
 // ---------------------------------------------------------------------------
+// product_vendor_mappings
+//
+// Many-to-many: one product can be fulfilled by multiple vendors.
+// vendorProductId is the vendor's SKU/product identifier.
+// Unique per (product_id, vendor_id) — one mapping per vendor per product.
+// ---------------------------------------------------------------------------
+
+export const productVendorMappings = pgTable(
+  "product_vendor_mappings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    vendorId: text("vendor_id").notNull(),
+    vendorProductId: text("vendor_product_id").notNull(),
+    vendorSku: text("vendor_sku"),
+    active: boolean("active").notNull().default(true),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("product_vendor_mappings_product_vendor_idx").on(
+      t.productId,
+      t.vendorId
+    ),
+  ]
+);
+
+// ---------------------------------------------------------------------------
+// fulfillment_quotes
+//
+// One row per vendor quote per order. Multiple vendors may quote the same order.
+// rawResponse snapshots the full vendor API response for auditing.
+// ---------------------------------------------------------------------------
+
+export const fulfillmentQuotes = pgTable("fulfillment_quotes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  orderId: uuid("order_id")
+    .notNull()
+    .references(() => orders.id, { onDelete: "cascade" }),
+  vendorId: text("vendor_id").notNull(),
+  quotedCents: integer("quoted_cents").notNull(),
+  shippingCents: integer("shipping_cents").notNull().default(0),
+  marginCents: integer("margin_cents"),   // order.totalCents − (quotedCents + shippingCents)
+  turnaroundDays: integer("turnaround_days"),
+  rawResponse: jsonb("raw_response"),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+    .notNull()
+    .defaultNow(),
+});
+
+// ---------------------------------------------------------------------------
+// fulfillment_submissions
+//
+// Tracks the actual API submission to a vendor for a given order.
+// vendorOrderId is populated once the vendor accepts the order.
+// ---------------------------------------------------------------------------
+
+export const FULFILLMENT_SUBMISSION_STATUSES = [
+  "pending",
+  "accepted",
+  "rejected",
+  "cancelled",
+] as const;
+
+export type FulfillmentSubmissionStatus =
+  (typeof FULFILLMENT_SUBMISSION_STATUSES)[number];
+
+export const fulfillmentSubmissions = pgTable("fulfillment_submissions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  orderId: uuid("order_id")
+    .notNull()
+    .references(() => orders.id, { onDelete: "cascade" }),
+  vendorId: text("vendor_id").notNull(),
+  vendorOrderId: text("vendor_order_id"),
+  status: text("status")
+    .notNull()
+    .default("pending")
+    .$type<FulfillmentSubmissionStatus>(),
+  rawRequest: jsonb("raw_request"),
+  rawResponse: jsonb("raw_response"),
+  ...timestamps,
+});
+
+// ---------------------------------------------------------------------------
+// fulfillment_events
+//
+// Inbound webhook payloads from vendors (shipped, tracking_updated, etc.).
+// processedAt is null until the event has been handled by our system.
+// ---------------------------------------------------------------------------
+
+export const fulfillmentEvents = pgTable("fulfillment_events", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  orderId: uuid("order_id")
+    .notNull()
+    .references(() => orders.id, { onDelete: "cascade" }),
+  vendorId: text("vendor_id").notNull(),
+  eventType: text("event_type").notNull(),
+  payload: jsonb("payload").notNull(),
+  processedAt: timestamp("processed_at", { withTimezone: true, mode: "date" }),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+    .notNull()
+    .defaultNow(),
+});
+
+// ---------------------------------------------------------------------------
 // Inferred row types
 // Use these for typed DB reads/writes throughout the app.
 // ---------------------------------------------------------------------------
@@ -250,3 +379,15 @@ export type NewOrderItem = InferInsertModel<typeof orderItems>;
 
 export type OrderFile = InferSelectModel<typeof orderFiles>;
 export type NewOrderFile = InferInsertModel<typeof orderFiles>;
+
+export type ProductVendorMapping = InferSelectModel<typeof productVendorMappings>;
+export type NewProductVendorMapping = InferInsertModel<typeof productVendorMappings>;
+
+export type FulfillmentQuote = InferSelectModel<typeof fulfillmentQuotes>;
+export type NewFulfillmentQuote = InferInsertModel<typeof fulfillmentQuotes>;
+
+export type FulfillmentSubmission = InferSelectModel<typeof fulfillmentSubmissions>;
+export type NewFulfillmentSubmission = InferInsertModel<typeof fulfillmentSubmissions>;
+
+export type FulfillmentEvent = InferSelectModel<typeof fulfillmentEvents>;
+export type NewFulfillmentEvent = InferInsertModel<typeof fulfillmentEvents>;

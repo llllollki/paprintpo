@@ -21,7 +21,22 @@ export default function CartPage() {
 
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
-  const [errors, setErrors] = useState<{ name?: string; email?: string; server?: string }>({});
+  const [addrLine1, setAddrLine1] = useState("");
+  const [addrLine2, setAddrLine2] = useState("");
+  const [addrCity, setAddrCity] = useState("");
+  const [addrState, setAddrState] = useState("");
+  const [addrPostal, setAddrPostal] = useState("");
+  const [addrCountry, setAddrCountry] = useState("US");
+  const [errors, setErrors] = useState<{
+    name?: string;
+    email?: string;
+    line1?: string;
+    city?: string;
+    state?: string;
+    postalCode?: string;
+    country?: string;
+    server?: string;
+  }>({});
   const [loading, setLoading] = useState(false);
 
   if (!hydrated) {
@@ -56,6 +71,11 @@ export default function CartPage() {
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
       next.email = "Enter a valid email address";
     }
+    if (!addrLine1.trim()) next.line1 = "Street address is required";
+    if (!addrCity.trim()) next.city = "City is required";
+    if (!addrState.trim()) next.state = "State / region is required";
+    if (!addrPostal.trim()) next.postalCode = "Postal code is required";
+    if (!addrCountry.trim()) next.country = "Country is required";
     return next;
   }
 
@@ -73,7 +93,19 @@ export default function CartPage() {
       const res = await fetch("/api/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customerName, customerEmail, items }),
+        body: JSON.stringify({
+          customerName,
+          customerEmail,
+          shippingAddress: {
+            line1: addrLine1,
+            line2: addrLine2,
+            city: addrCity,
+            state: addrState,
+            postalCode: addrPostal,
+            country: addrCountry,
+          },
+          items,
+        }),
       });
 
       if (!res.ok) {
@@ -215,6 +247,124 @@ export default function CartPage() {
               {errors.email && (
                 <p className="text-xs text-red-500">{errors.email}</p>
               )}
+            </div>
+          </div>
+
+          {/* Shipping address */}
+          <div className="w-full sm:w-72 space-y-3">
+            <p className="text-sm font-medium text-gray-800">Shipping address</p>
+
+            <div className="space-y-1">
+              <label htmlFor="addrLine1" className="block text-xs text-gray-500">
+                Street address
+              </label>
+              <input
+                id="addrLine1"
+                type="text"
+                autoComplete="address-line1"
+                value={addrLine1}
+                onChange={(e) => setAddrLine1(e.target.value)}
+                className={`w-full rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 ${
+                  errors.line1 ? "border-red-400" : "border-gray-300"
+                }`}
+              />
+              {errors.line1 && (
+                <p className="text-xs text-red-500">{errors.line1}</p>
+              )}
+            </div>
+
+            <div className="space-y-1">
+              <label htmlFor="addrLine2" className="block text-xs text-gray-500">
+                Apt / suite / unit <span className="text-gray-400">(optional)</span>
+              </label>
+              <input
+                id="addrLine2"
+                type="text"
+                autoComplete="address-line2"
+                value={addrLine2}
+                onChange={(e) => setAddrLine2(e.target.value)}
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label htmlFor="addrCity" className="block text-xs text-gray-500">
+                  City
+                </label>
+                <input
+                  id="addrCity"
+                  type="text"
+                  autoComplete="address-level2"
+                  value={addrCity}
+                  onChange={(e) => setAddrCity(e.target.value)}
+                  className={`w-full rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 ${
+                    errors.city ? "border-red-400" : "border-gray-300"
+                  }`}
+                />
+                {errors.city && (
+                  <p className="text-xs text-red-500">{errors.city}</p>
+                )}
+              </div>
+
+              <div className="space-y-1">
+                <label htmlFor="addrState" className="block text-xs text-gray-500">
+                  State / region
+                </label>
+                <input
+                  id="addrState"
+                  type="text"
+                  autoComplete="address-level1"
+                  value={addrState}
+                  onChange={(e) => setAddrState(e.target.value)}
+                  className={`w-full rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 ${
+                    errors.state ? "border-red-400" : "border-gray-300"
+                  }`}
+                />
+                {errors.state && (
+                  <p className="text-xs text-red-500">{errors.state}</p>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label htmlFor="addrPostal" className="block text-xs text-gray-500">
+                  Postal code
+                </label>
+                <input
+                  id="addrPostal"
+                  type="text"
+                  autoComplete="postal-code"
+                  value={addrPostal}
+                  onChange={(e) => setAddrPostal(e.target.value)}
+                  className={`w-full rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 ${
+                    errors.postalCode ? "border-red-400" : "border-gray-300"
+                  }`}
+                />
+                {errors.postalCode && (
+                  <p className="text-xs text-red-500">{errors.postalCode}</p>
+                )}
+              </div>
+
+              <div className="space-y-1">
+                <label htmlFor="addrCountry" className="block text-xs text-gray-500">
+                  Country
+                </label>
+                <input
+                  id="addrCountry"
+                  type="text"
+                  autoComplete="country-name"
+                  value={addrCountry}
+                  onChange={(e) => setAddrCountry(e.target.value)}
+                  className={`w-full rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 ${
+                    errors.country ? "border-red-400" : "border-gray-300"
+                  }`}
+                />
+                {errors.country && (
+                  <p className="text-xs text-red-500">{errors.country}</p>
+                )}
+              </div>
             </div>
           </div>
 

@@ -1,0 +1,2 @@
+ALTER TABLE "orders" ALTER COLUMN "fulfillment_selection" SET DATA TYPE jsonb USING "fulfillment_selection"::jsonb;--> statement-breakpoint
+ALTER TABLE "fulfillment_quotes" ADD COLUMN "margin_cents" integer;

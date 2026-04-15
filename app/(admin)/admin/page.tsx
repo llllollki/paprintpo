@@ -7,16 +7,18 @@ import { formatCents } from "@/lib/pricing";
 import type { OrderStatus } from "@/lib/db/schema";
 
 const STATUS_STYLES: Record<OrderStatus, string> = {
-  pending:         "bg-yellow-50  text-yellow-700  ring-yellow-200",
-  paid:            "bg-blue-50    text-blue-700    ring-blue-200",
-  artwork_review:  "bg-orange-50  text-orange-700  ring-orange-200",
-  proof_sent:      "bg-purple-50  text-purple-700  ring-purple-200",
-  proof_approved:  "bg-indigo-50  text-indigo-700  ring-indigo-200",
-  in_production:   "bg-cyan-50    text-cyan-700    ring-cyan-200",
-  shipped:         "bg-teal-50    text-teal-700    ring-teal-200",
-  complete:        "bg-green-50   text-green-700   ring-green-200",
-  payment_failed:  "bg-red-50     text-red-700     ring-red-200",
-  cancelled:       "bg-gray-100   text-gray-500    ring-gray-200",
+  pending:              "bg-yellow-50  text-yellow-700  ring-yellow-200",
+  paid:                 "bg-blue-50    text-blue-700    ring-blue-200",
+  artwork_review:       "bg-orange-50  text-orange-700  ring-orange-200",
+  proof_sent:           "bg-purple-50  text-purple-700  ring-purple-200",
+  proof_approved:       "bg-indigo-50  text-indigo-700  ring-indigo-200",
+  in_production:        "bg-cyan-50    text-cyan-700    ring-cyan-200",
+  submitted_to_vendor:  "bg-sky-50     text-sky-700     ring-sky-200",
+  fulfillment_failed:   "bg-rose-50    text-rose-700    ring-rose-200",
+  shipped:              "bg-teal-50    text-teal-700    ring-teal-200",
+  complete:             "bg-green-50   text-green-700   ring-green-200",
+  payment_failed:       "bg-red-50     text-red-700     ring-red-200",
+  cancelled:            "bg-gray-100   text-gray-500    ring-gray-200",
 };
 
 function StatusBadge({ status }: { status: OrderStatus }) {
