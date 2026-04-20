@@ -15,6 +15,7 @@ import { OptionSelector } from "./OptionSelector";
 import { FileUploader } from "./FileUploader";
 import type { OptionGroup } from "./OptionSelector";
 import type { Product, ProductOption, QuantityTier } from "@/lib/db/schema";
+import type { ArtworkFile } from "@/lib/cart";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -72,6 +73,7 @@ export function ProductConfigurator({ product, options, tiers }: Props) {
 
   const [selected, setSelected] = useState<Record<string, string>>({});
   const [quantity, setQuantity] = useState(minQty);
+  const [artworkFile, setArtworkFile] = useState<ArtworkFile | undefined>();
   const [added, setAdded] = useState(false);
 
   const optionModifiers = options
@@ -89,6 +91,8 @@ export function ProductConfigurator({ product, options, tiers }: Props) {
     optionGroups.length === 0 ||
     optionGroups.every((g) => selected[g.name] !== undefined);
 
+  const canAddToCart = allGroupsSelected && !!artworkFile;
+
   function handleOptionChange(groupName: string, value: string) {
     setSelected((prev) => ({ ...prev, [groupName]: value }));
   }
@@ -99,7 +103,7 @@ export function ProductConfigurator({ product, options, tiers }: Props) {
   }
 
   function handleAddToCart() {
-    if (!allGroupsSelected) return;
+    if (!canAddToCart) return;
 
     addItem({
       productId: product.id,
@@ -115,6 +119,7 @@ export function ProductConfigurator({ product, options, tiers }: Props) {
       basePrice: product.basePrice,
       optionModifiers,
       tiers: tiers.map((t) => ({ minQty: t.minQty, unitPrice: t.unitPrice })),
+      artworkFile,
     });
 
     setAdded(true);
@@ -132,10 +137,7 @@ export function ProductConfigurator({ product, options, tiers }: Props) {
 
       {/* Quantity */}
       <div>
-        <label
-          htmlFor="quantity"
-          className="block text-sm font-medium text-gray-700 mb-1"
-        >
+        <label htmlFor="quantity" className="block text-sm font-semibold mb-1.5" style={{ color: "var(--ink)", fontFamily: "var(--font-head)" }}>
           Quantity
         </label>
         <input
@@ -145,57 +147,61 @@ export function ProductConfigurator({ product, options, tiers }: Props) {
           step={1}
           value={quantity}
           onChange={handleQuantityChange}
-          className="block w-32 rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
+          className="block w-32 rounded-lg px-3.5 py-2.5 text-sm outline-none"
+          style={{ border: "1.5px solid var(--border)", color: "var(--ink)" }}
         />
         {tiers.length > 0 && (
-          <p className="mt-1 text-xs text-gray-400">
+          <p className="mt-1 text-xs" style={{ color: "var(--ink-soft)" }}>
             Minimum order: {minQty} units
           </p>
         )}
       </div>
 
       {/* Price display */}
-      <div className="rounded-lg bg-gray-50 border border-gray-200 p-4 space-y-1">
-        <div className="flex justify-between text-sm text-gray-600">
+      <div className="rounded-xl p-4 space-y-2" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+        <div className="flex justify-between text-sm" style={{ color: "var(--ink-soft)" }}>
           <span>Unit price</span>
           <span>{formatCents(pricing.unitPrice)}</span>
         </div>
-        <div className="flex justify-between font-semibold text-gray-900">
+        <div className="flex justify-between font-bold text-base" style={{ color: "var(--ink)", borderTop: "1px solid var(--border)", paddingTop: "8px" }}>
           <span>Total ({quantity} units)</span>
-          <span>{formatCents(pricing.lineTotal)}</span>
+          <span style={{ color: "var(--violet)" }}>{formatCents(pricing.lineTotal)}</span>
         </div>
         {pricing.tierApplied && (
-          <p className="text-xs text-green-700 pt-1">
-            Volume pricing applied — {pricing.tierApplied.minQty}+ unit rate
+          <p className="text-xs font-medium" style={{ color: "var(--teal, #00c9a7)" }}>
+            ✓ Volume pricing applied — {pricing.tierApplied.minQty}+ unit rate
           </p>
         )}
       </div>
 
-      {/* Artwork upload placeholder */}
+      {/* Artwork upload */}
       <div>
-        <p className="text-sm font-medium text-gray-700 mb-2">Artwork file</p>
-        <FileUploader onUploadComplete={() => {}} />
-        <p className="mt-1 text-xs text-gray-400">
-          Artwork upload is available at checkout once your order is placed.
+        <p className="text-sm font-semibold mb-2" style={{ color: "var(--ink)", fontFamily: "var(--font-head)" }}>
+          Artwork file <span style={{ color: "#ef4444" }}>*</span>
         </p>
+        <FileUploader
+          uploadedFile={artworkFile}
+          onUploadComplete={setArtworkFile}
+          onClear={() => setArtworkFile(undefined)}
+        />
       </div>
 
       {/* Add to Cart */}
       <button
         onClick={handleAddToCart}
-        disabled={!allGroupsSelected || added}
-        className={`w-full rounded px-4 py-3 text-sm font-semibold text-white transition-colors ${
-          added
-            ? "bg-green-700 cursor-default"
-            : allGroupsSelected
-            ? "bg-gray-900 hover:bg-gray-700"
-            : "bg-gray-900 opacity-40 cursor-not-allowed"
-        }`}
+        disabled={!canAddToCart || added}
+        className="w-full rounded-lg px-4 py-3.5 text-sm font-bold text-white transition-all hover:opacity-90 disabled:cursor-not-allowed"
+        style={{
+          background: added ? "#15803d" : "var(--violet)",
+          opacity: added || canAddToCart ? 1 : 0.4,
+        }}
       >
         {added
-          ? "Added to cart!"
+          ? "✓ Added to cart!"
           : !allGroupsSelected
           ? "Select all options to continue"
+          : !artworkFile
+          ? "Upload artwork to continue"
           : "Add to Cart"}
       </button>
     </div>

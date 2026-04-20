@@ -8,9 +8,19 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  // Require a relative path to prevent open-redirect to external URLs.
+  // Validate the redirect target is same-origin.
+  // Checking startsWith("/") is insufficient — "//evil.com" passes that check.
+  // Constructing a URL relative to `origin` and comparing origins is safe.
   const rawNext = searchParams.get("next") ?? "";
-  const next = rawNext.startsWith("/") ? rawNext : "/admin";
+  let next = "/admin";
+  if (rawNext) {
+    try {
+      const resolved = new URL(rawNext, origin);
+      if (resolved.origin === origin) next = resolved.pathname + resolved.search;
+    } catch {
+      // malformed URL — fall back to default
+    }
+  }
 
   // If there is no code, the link is malformed — redirect to login.
   if (!code) {

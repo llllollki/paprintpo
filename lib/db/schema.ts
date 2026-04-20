@@ -17,6 +17,7 @@ import {
   jsonb,
   timestamp,
   uniqueIndex,
+  index,
   check,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
@@ -46,6 +47,8 @@ export const products = pgTable("products", {
   category: text("category").notNull(),
   basePrice: integer("base_price").notNull(), // cents
   active: boolean("active").notNull().default(true),
+  // Drives Quick Preview feature — never hardcode eligible slugs in code.
+  quickPreviewEnabled: boolean("quick_preview_enabled").notNull().default(false),
   ...timestamps,
 });
 
@@ -356,6 +359,120 @@ export const fulfillmentEvents = pgTable("fulfillment_events", {
 });
 
 // ---------------------------------------------------------------------------
+// preview_sessions
+//
+// Tracks uploaded images for the Quick Preview flow (/quick-preview).
+// Guest users are identified by a server-set cookie token (user_id is nullable).
+// TTL: 24 hours — cleaned up by cron or Supabase edge function.
+// RLS: access scoped to the sessionToken cookie value (anonymous access).
+// ---------------------------------------------------------------------------
+
+export const previewSessions = pgTable("preview_sessions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id"), // nullable — guest users supported
+  sessionToken: text("session_token").notNull().unique(), // server-set cookie for guest RLS
+  storagePath: text("storage_path").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+    .notNull()
+    .defaultNow(),
+});
+
+// ---------------------------------------------------------------------------
+// print_specs
+//
+// Paprintpo-canonical print specs. Stable slugs — never change after creation.
+// Read-only for authenticated users; inaccessible to anon (RLS).
+// Mirrors the constants in lib/fulfillment/specs.ts; this table is the DB source.
+// ---------------------------------------------------------------------------
+
+export const printSpecs = pgTable("print_specs", {
+  id: text("id").primaryKey(), // stable slug e.g. "business_card_standard_250"
+  productType: text("product_type").notNull(),
+  quantity: integer("quantity").notNull(),
+  size: text("size").notNull(),
+  sides: text("sides").notNull(),
+  finish: text("finish").notNull(),
+  paperStock: text("paper_stock").notNull(),
+  orientation: text("orientation").notNull(),
+  bleedMm: integer("bleed_mm").notNull(), // required for vendor submission
+  dpiRequired: integer("dpi_required").notNull(), // required for artwork validation
+  ...timestamps,
+});
+
+// ---------------------------------------------------------------------------
+// bundles
+//
+// DB-driven bundle definitions. Never hardcode bundle contents in code.
+// Public read (storefront display). price in cents.
+// ---------------------------------------------------------------------------
+
+export const bundles = pgTable("bundles", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  slug: text("slug").notNull().unique(),
+  name: text("name").notNull(),
+  description: text("description"),
+  price: integer("price").notNull(), // cents — may be computed at display time
+  active: boolean("active").notNull().default(true),
+  ...timestamps,
+});
+
+// ---------------------------------------------------------------------------
+// bundle_items
+//
+// Maps a bundle to its canonical print specs.
+// quantity_override: null = use the spec's default quantity.
+// ---------------------------------------------------------------------------
+
+export const bundleItems = pgTable(
+  "bundle_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    bundleId: uuid("bundle_id")
+      .notNull()
+      .references(() => bundles.id, { onDelete: "cascade" }),
+    printSpecId: text("print_spec_id")
+      .notNull()
+      .references(() => printSpecs.id),
+    quantityOverride: integer("quantity_override"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("bundle_items_bundle_id_idx").on(t.bundleId),
+  ]
+);
+
+// ---------------------------------------------------------------------------
+// vendor_product_mappings
+//
+// Maps canonical print specs → vendor SKUs. Server-side only.
+// No customer access (RLS denies all non-service-role access).
+// Distinct from product_vendor_mappings (which maps product_id → vendor).
+// ---------------------------------------------------------------------------
+
+export const vendorProductMappings = pgTable(
+  "vendor_product_mappings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    printSpecId: text("print_spec_id")
+      .notNull()
+      .references(() => printSpecs.id),
+    vendorId: text("vendor_id").notNull(),
+    vendorSku: text("vendor_sku").notNull(),
+    vendorProductRef: text("vendor_product_ref"),
+    active: boolean("active").notNull().default(true),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("vendor_product_mappings_spec_vendor_idx").on(
+      t.printSpecId,
+      t.vendorId
+    ),
+  ]
+);
+
+// ---------------------------------------------------------------------------
 // Inferred row types
 // Use these for typed DB reads/writes throughout the app.
 // ---------------------------------------------------------------------------
@@ -391,3 +508,18 @@ export type NewFulfillmentSubmission = InferInsertModel<typeof fulfillmentSubmis
 
 export type FulfillmentEvent = InferSelectModel<typeof fulfillmentEvents>;
 export type NewFulfillmentEvent = InferInsertModel<typeof fulfillmentEvents>;
+
+export type PreviewSession = InferSelectModel<typeof previewSessions>;
+export type NewPreviewSession = InferInsertModel<typeof previewSessions>;
+
+export type PrintSpec = InferSelectModel<typeof printSpecs>;
+export type NewPrintSpec = InferInsertModel<typeof printSpecs>;
+
+export type Bundle = InferSelectModel<typeof bundles>;
+export type NewBundle = InferInsertModel<typeof bundles>;
+
+export type BundleItem = InferSelectModel<typeof bundleItems>;
+export type NewBundleItem = InferInsertModel<typeof bundleItems>;
+
+export type VendorProductMapping = InferSelectModel<typeof vendorProductMappings>;
+export type NewVendorProductMapping = InferInsertModel<typeof vendorProductMappings>;

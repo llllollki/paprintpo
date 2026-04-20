@@ -35,8 +35,12 @@ export function FulfillmentPanel({ order, quotes }: Props) {
 
   const isSubmitted = status === "submitted_to_vendor";
   const hasFailed = status === "fulfillment_failed";
-  const canRequest = status === "proof_approved";
-  const canSubmit = canRequest && sel !== null;
+  // Allow re-requesting quotes from fulfillment_failed so admin can retry
+  // without first having to manually reset the status.
+  const canRequest = status === "proof_approved" || status === "fulfillment_failed";
+  // Submission requires proof_approved — fulfillment_failed retry goes:
+  // re-request quotes → select vendor → reset status to proof_approved → submit.
+  const canSubmit = status === "proof_approved" && sel !== null;
 
   return (
     <section>
@@ -129,7 +133,6 @@ export function FulfillmentPanel({ order, quotes }: Props) {
                   const isRec = rec?.quoteId === q.id;
                   const isSel = sel?.quoteId === q.id;
                   const totalCost = q.quotedCents + q.shippingCents;
-                  const isOverrideChoice = sel !== null && !isSel;
 
                   return (
                     <tr

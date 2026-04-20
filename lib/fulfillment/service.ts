@@ -10,10 +10,10 @@ import {
   fulfillmentSubmissions,
 } from "@/lib/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
-import { listAdapters, getAdapter } from "./registry";
+import { getQuoteAdapters, getSubmitAdapter } from "./router";
 import { pickRecommendation } from "./selection";
 import type { FulfillmentOrder, FulfillmentOrderItem } from "./types";
-import "./config"; // ensure adapters are registered at import time
+import { MIN_MARGIN_CENTS } from "./config";
 
 // ---------------------------------------------------------------------------
 // requestQuotes
@@ -32,6 +32,15 @@ export async function requestQuotes(orderId: string): Promise<void> {
   const order = orderRows[0];
 
   if (!order) throw new Error(`Order ${orderId} not found`);
+
+  // Only allow quoting from states where fulfillment is appropriate.
+  // proof_approved: standard flow; fulfillment_failed: admin retry path.
+  if (order.status !== "proof_approved" && order.status !== "fulfillment_failed") {
+    throw new Error(
+      `Cannot request quotes for order in status "${order.status}" — must be proof_approved or fulfillment_failed`
+    );
+  }
+
   if (!order.shippingAddress) {
     throw new Error(`Order ${orderId} has no shipping address — cannot request quotes`);
   }
@@ -54,25 +63,23 @@ export async function requestQuotes(orderId: string): Promise<void> {
     .set({ fulfillmentSelection: null, fulfillmentRecommendation: null })
     .where(eq(orders.id, orderId));
 
-  const adapters = listAdapters();
+  const adapters = getQuoteAdapters();
   if (adapters.length === 0) throw new Error("No fulfillment adapters registered");
+
+  // Batch-load all vendor mappings for this order's products in one query
+  // instead of one query per adapter (N+1 when multiple vendors are registered).
+  const allMappings =
+    productIds.length > 0
+      ? await db
+          .select()
+          .from(productVendorMappings)
+          .where(inArray(productVendorMappings.productId, productIds))
+      : [];
 
   const savedQuotes: (typeof fulfillmentQuotes.$inferSelect)[] = [];
 
   for (const adapter of adapters) {
-    // Load vendor-specific product mappings for this order's products.
-    const mappings =
-      productIds.length > 0
-        ? await db
-            .select()
-            .from(productVendorMappings)
-            .where(
-              and(
-                eq(productVendorMappings.vendorId, adapter.vendorId),
-                inArray(productVendorMappings.productId, productIds)
-              )
-            )
-        : [];
+    const mappings = allMappings.filter((m) => m.vendorId === adapter.vendorId);
 
     const fulfillmentItems: FulfillmentOrderItem[] = items.map((item) => {
       const mapping = mappings.find((m) => m.productId === item.productId);
@@ -157,6 +164,15 @@ export async function submitToVendor(orderId: string): Promise<void> {
   const order = orderRows[0];
 
   if (!order) throw new Error(`Order ${orderId} not found`);
+
+  // CLAUDE.md: no fulfillment submission without proof_approved status.
+  // This service-layer guard is defence-in-depth — the UI already enforces it.
+  if (order.status !== "proof_approved") {
+    throw new Error(
+      `Cannot submit order in status "${order.status}" — must be proof_approved`
+    );
+  }
+
   if (!order.fulfillmentSelection) {
     throw new Error("No vendor selected — set fulfillment_selection before submitting");
   }
@@ -166,20 +182,23 @@ export async function submitToVendor(orderId: string): Promise<void> {
 
   const { vendorId, quoteId } = order.fulfillmentSelection;
 
-  // Validate the selected quote still exists and belongs to this order.
-  // If quotes were re-requested since selection, the quoteId is stale.
-  const quoteRows = await db
-    .select({ id: fulfillmentQuotes.id })
+  // Validate the selected quote still exists, belongs to this order, and was
+  // issued by the selected vendor. Also fetch marginCents here to avoid a
+  // second query for the margin floor check below.
+  const quote = await db
+    .select({ id: fulfillmentQuotes.id, marginCents: fulfillmentQuotes.marginCents })
     .from(fulfillmentQuotes)
     .where(
       and(
         eq(fulfillmentQuotes.id, quoteId),
-        eq(fulfillmentQuotes.orderId, orderId)
+        eq(fulfillmentQuotes.orderId, orderId),
+        eq(fulfillmentQuotes.vendorId, vendorId)
       )
     )
-    .limit(1);
+    .limit(1)
+    .then((rows) => rows[0]);
 
-  if (quoteRows.length === 0) {
+  if (!quote) {
     // Clear the stale selection so admin is prompted to re-confirm.
     await db
       .update(orders)
@@ -190,7 +209,14 @@ export async function submitToVendor(orderId: string): Promise<void> {
     );
   }
 
-  const adapter = getAdapter(vendorId);
+  const marginCents = quote.marginCents ?? 0;
+  if (marginCents < MIN_MARGIN_CENTS) {
+    throw new Error(
+      `Margin ${marginCents}¢ is below the required floor of ${MIN_MARGIN_CENTS}¢ — adjust pricing or select a cheaper vendor.`
+    );
+  }
+
+  const adapter = getSubmitAdapter(vendorId);
   if (!adapter) throw new Error(`No adapter registered for vendor "${vendorId}"`);
 
   const items = await db

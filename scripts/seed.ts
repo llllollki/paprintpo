@@ -9,8 +9,12 @@ import {
   products,
   productOptions,
   quantityTiers,
+  printSpecs,
+  bundles,
+  bundleItems,
 } from "../lib/db/schema";
 import { eq } from "drizzle-orm";
+import { PRINT_SPECS } from "../lib/fulfillment/specs";
 
 // ---------------------------------------------------------------------------
 // Catalog definition
@@ -114,6 +118,8 @@ async function seed() {
     }
 
     // Insert product
+    // Per CLAUDE.md: business cards, stickers, and flyers are Quick Preview eligible.
+    const QUICK_PREVIEW_SLUGS = ["standard-business-card", "die-cut-sticker", "half-page-flyer"];
     const [product] = await db
       .insert(products)
       .values({
@@ -123,6 +129,7 @@ async function seed() {
         category: item.category,
         basePrice: item.basePrice,
         active: true,
+        quickPreviewEnabled: QUICK_PREVIEW_SLUGS.includes(item.slug),
       })
       .returning({ id: products.id });
 
@@ -139,6 +146,103 @@ async function seed() {
       item.tiers.map((t) => ({ ...t, productId: product.id }))
     );
     console.log(`    ${item.tiers.length} quantity tiers`);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Print specs — seed from PRINT_SPECS constants
+  // ---------------------------------------------------------------------------
+  console.log("\nSeeding print specs…");
+
+  for (const spec of Object.values(PRINT_SPECS)) {
+    await db
+      .delete(printSpecs)
+      .where(eq(printSpecs.id, spec.id));
+
+    await db.insert(printSpecs).values({
+      id: spec.id,
+      productType: spec.productType,
+      quantity: spec.quantity,
+      size: spec.size,
+      sides: spec.sides,
+      finish: spec.finish,
+      paperStock: spec.paperStock,
+      orientation: spec.orientation,
+      bleedMm: spec.bleedMm,
+      dpiRequired: spec.dpiRequired,
+    });
+    console.log(`  ${spec.id}`);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Bundles — Starter Brand Kit, Local Promo Kit, Repeat Customer Kit
+  // ---------------------------------------------------------------------------
+  console.log("\nSeeding bundles…");
+
+  const BUNDLE_DEFS = [
+    {
+      slug: "starter-brand-kit",
+      name: "Starter Brand Kit",
+      description: "Everything a new business needs to make a first impression — business cards, stickers, and reminder cards in one coordinated package.",
+      price: 16900, // $169.00
+      items: [
+        "business_card_standard_250",
+        "sticker_die_cut_100",
+        "reminder_card_250",
+      ],
+    },
+    {
+      slug: "local-promo-kit",
+      name: "Local Promo Kit",
+      description: "Promote your business in the neighborhood — business cards, flyers, a poster, and stickers to cover all surfaces.",
+      price: 19900, // $199.00
+      items: [
+        "business_card_standard_250",
+        "flyer_basic_250",
+        "poster_standard_1",
+        "sticker_die_cut_100",
+      ],
+    },
+    {
+      slug: "repeat-customer-kit",
+      name: "Repeat Customer Kit",
+      description: "Built for retention — business cards, loyalty cards, reminder cards, and flyers to keep customers coming back.",
+      price: 26900, // $269.00
+      items: [
+        "business_card_standard_250",
+        "loyalty_card_250",
+        "reminder_card_250",
+        "flyer_basic_250",
+      ],
+    },
+  ];
+
+  for (const def of BUNDLE_DEFS) {
+    const existing = await db
+      .select({ id: bundles.id })
+      .from(bundles)
+      .where(eq(bundles.slug, def.slug))
+      .limit(1);
+
+    if (existing[0]) {
+      await db.delete(bundles).where(eq(bundles.id, existing[0].id));
+    }
+
+    const [bundle] = await db
+      .insert(bundles)
+      .values({
+        slug: def.slug,
+        name: def.name,
+        description: def.description,
+        price: def.price,
+        active: true,
+      })
+      .returning({ id: bundles.id });
+
+    await db.insert(bundleItems).values(
+      def.items.map((specId) => ({ bundleId: bundle.id, printSpecId: specId }))
+    );
+
+    console.log(`  ${def.name} (${def.items.length} items)`);
   }
 
   console.log("Done.");

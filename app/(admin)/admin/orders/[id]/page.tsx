@@ -10,6 +10,7 @@ import { ORDER_STATUSES, type OrderStatus, type OrderFileStatus } from "@/lib/db
 import { supabaseAdmin } from "@/lib/supabase/service";
 import { updateOrderStatus, updateFileStatus } from "./actions";
 import { FulfillmentPanel } from "./_fulfillment-panel";
+import { toLabel } from "@/lib/format";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -41,7 +42,15 @@ const FILE_STATUS_STYLES: Record<OrderFileStatus, string> = {
 };
 
 const STRIPE_MANAGED: OrderStatus[] = ["paid", "payment_failed"];
-const FULFILLMENT_MANAGED: OrderStatus[] = ["submitted_to_vendor", "fulfillment_failed"];
+// fulfillment_failed is intentionally absent — it's a recoverable error state.
+// Admins must be able to reset it (e.g. back to proof_approved) to retry.
+// The actions.ts FULFILLMENT_MANAGED still blocks admins from SETTING orders
+// to fulfillment_failed, so the system remains the only writer of that status.
+const FULFILLMENT_MANAGED: OrderStatus[] = [
+  "submitted_to_vendor",
+  "in_production",
+  "shipped",
+];
 const ADMIN_SETTABLE = ORDER_STATUSES.filter(
   (s) => !STRIPE_MANAGED.includes(s) && !FULFILLMENT_MANAGED.includes(s)
 );
@@ -60,10 +69,6 @@ function FileStatusBadge({ status }: { status: OrderFileStatus }) {
       {status.replace(/_/g, " ")}
     </span>
   );
-}
-
-function toLabel(groupName: string) {
-  return groupName.charAt(0).toUpperCase() + groupName.slice(1).replace(/-/g, " ");
 }
 
 function formatBytes(bytes: number): string {
@@ -107,11 +112,12 @@ export default async function AdminOrderDetailPage({ params }: Props) {
   }, {});
 
   return (
-    <main className="max-w-3xl mx-auto px-4 py-10 space-y-8">
+    <main className="max-w-3xl mx-auto px-6 py-12 space-y-8">
       {/* Back */}
       <Link
         href="/admin"
-        className="text-sm text-gray-500 hover:text-gray-900 underline underline-offset-2 transition-colors"
+        className="text-sm font-medium hover:underline"
+        style={{ color: "var(--violet)" }}
       >
         ← All orders
       </Link>
@@ -119,11 +125,11 @@ export default async function AdminOrderDetailPage({ params }: Props) {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">
+          <h1 className="text-2xl font-extrabold" style={{ fontFamily: "var(--font-head)", color: "var(--ink)" }}>
             Order{" "}
             <span className="font-mono text-xl">{id.split("-")[0].toUpperCase()}</span>
           </h1>
-          <p className="text-sm text-gray-400 mt-1">
+          <p className="text-sm mt-1" style={{ color: "var(--ink-soft)" }}>
             {order.createdAt.toLocaleDateString("en-US", {
               month: "long",
               day: "numeric",
@@ -138,12 +144,12 @@ export default async function AdminOrderDetailPage({ params }: Props) {
 
       {/* Customer */}
       <section>
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">
+        <h2 className="text-[11px] font-bold uppercase tracking-[0.12em] mb-3" style={{ color: "var(--ink-soft)" }}>
           Customer
         </h2>
-        <div className="rounded border border-gray-200 px-4 py-3 space-y-1 bg-white">
-          <p className="font-medium text-gray-900">{order.customerName}</p>
-          <p className="text-sm text-gray-500">{order.customerEmail}</p>
+        <div className="rounded-xl px-4 py-3.5 space-y-0.5 bg-white" style={{ border: "1px solid var(--border)" }}>
+          <p className="font-semibold" style={{ color: "var(--ink)" }}>{order.customerName}</p>
+          <p className="text-sm" style={{ color: "var(--ink-soft)" }}>{order.customerEmail}</p>
         </div>
       </section>
 

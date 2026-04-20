@@ -6,7 +6,7 @@
 //   - display the item in the cart (productName, optionLabels, quantity, prices)
 //   - reprice on quantity change (basePrice, optionModifiers, tiers)
 //
-// Persistence: localStorage key "print_cart". Written on every dispatch.
+// Persistence: localStorage key "paprintpo_cart". Written on every dispatch.
 // Hydration: populated in useEffect after mount to avoid SSR mismatch.
 
 import {
@@ -29,6 +29,13 @@ export interface CartTier {
   unitPrice: number;
 }
 
+export interface ArtworkFile {
+  storagePath: string; // staging/{uuid}.{ext} — committed to order_files at checkout
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+}
+
 export interface CartItem {
   id: string;                              // client-generated uuid
   productId: string;
@@ -45,6 +52,11 @@ export interface CartItem {
   basePrice: number;
   optionModifiers: number[];
   tiers: CartTier[];
+  // Artwork uploaded at configurator time; committed to order_files at checkout.
+  artworkFile?: ArtworkFile;
+  // Set when item was added via Quick Preview bundle flow.
+  bundleId?: string;
+  bundleName?: string;
 }
 
 interface CartContextValue {
@@ -53,7 +65,7 @@ interface CartContextValue {
   removeItem: (id: string) => void;
   updateQuantity: (id: string, quantity: number) => void;
   clearCart: () => void;
-  itemCount: number;       // sum of quantities, for nav badge
+  itemCount: number;       // number of distinct line items, for nav badge
   subtotalCents: number;   // sum of lineTotalCents
   hydrated: boolean;       // false until localStorage is read; prevents cart flash
 }
@@ -85,12 +97,34 @@ function reprice(item: CartItem, quantity: number): CartItem {
   };
 }
 
+// crypto.randomUUID() requires a secure context (HTTPS/localhost).
+// On LAN dev (HTTP), mobile browsers don't provide it — fall back gracefully.
+function generateId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    return [...bytes].map((b, i) =>
+      [4, 6, 8, 10].includes(i) ? "-" + b.toString(16).padStart(2, "0") : b.toString(16).padStart(2, "0")
+    ).join("");
+  }
+  // Last-resort fallback — Math.random-based UUID v4 (cart IDs only, not security tokens)
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
 function reducer(state: CartItem[], action: Action): CartItem[] {
   switch (action.type) {
     case "HYDRATE":
       return action.items;
     case "ADD":
-      return [...state, { ...action.item, id: crypto.randomUUID() }];
+      return [...state, { ...action.item, id: generateId() }];
     case "REMOVE":
       return state.filter((i) => i.id !== action.id);
     case "UPDATE_QTY":
@@ -108,7 +142,7 @@ function reducer(state: CartItem[], action: Action): CartItem[] {
 // Context
 // ---------------------------------------------------------------------------
 
-export const STORAGE_KEY = "print_cart";
+export const STORAGE_KEY = "paprintpo_cart";
 
 const CartContext = createContext<CartContextValue | null>(null);
 
@@ -152,7 +186,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     dispatch({ type: "CLEAR" });
   }, []);
 
-  const itemCount = items.reduce((sum, i) => sum + i.quantity, 0);
+  const itemCount = items.length;
   const subtotalCents = items.reduce((sum, i) => sum + i.lineTotalCents, 0);
 
   return createElement(CartContext.Provider, {
@@ -166,8 +200,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       subtotalCents,
       hydrated,
     },
-    children,
-  });
+  }, children);
 }
 
 export function useCart(): CartContextValue {

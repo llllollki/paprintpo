@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { orders, orderItems, productOptions, quantityTiers } from "@/lib/db/schema";
+import { orders, orderItems, orderFiles, productOptions, quantityTiers } from "@/lib/db/schema";
 import { getProductBySlug } from "@/lib/db/queries";
 import { calculatePrice } from "@/lib/pricing";
 import { stripe } from "@/lib/stripe";
@@ -35,6 +35,13 @@ const CartItemSchema = z.object({
   minQty: z.number().int().positive(),
   category: z.string(),
   id: z.string(),
+  // Artwork uploaded at configurator time; storagePath must be in staging/ prefix.
+  artworkFile: z.object({
+    storagePath: z.string().startsWith("staging/"),
+    filename: z.string().min(1).max(200),
+    mimeType: z.string().min(1),
+    sizeBytes: z.number().int().positive(),
+  }).optional(),
 });
 
 const ShippingAddressSchema = z.object({
@@ -129,31 +136,59 @@ export async function POST(request: NextRequest) {
   // Total equals subtotal for now; tax/shipping applied at Stripe level later
   const totalCents = subtotalCents;
 
-  // 3. Create order row
-  const [order] = await db
-    .insert(orders)
-    .values({
-      customerName,
-      customerEmail,
-      status: "pending",
-      subtotalCents,
-      totalCents,
-      shippingAddress,
-    })
-    .returning();
+  // 3 + 4. Create order + order_items + order_files atomically.
+  // Using a transaction prevents partial state where the order exists but items
+  // are missing, or items exist but artwork references are lost.
+  const [order] = await db.transaction(async (tx) => {
+    const [newOrder] = await tx
+      .insert(orders)
+      .values({
+        customerName,
+        customerEmail,
+        status: "pending",
+        subtotalCents,
+        totalCents,
+        shippingAddress,
+      })
+      .returning();
 
-  // 4. Create order_items rows
-  await db.insert(orderItems).values(
-    revalidatedItems.map((item) => ({
-      orderId: order.id,
-      productId: item.productId,
-      productNameSnapshot: item.productNameSnapshot,
-      optionsSnapshot: item.selectedOptions,
-      quantity: item.quantity,
-      unitPriceCents: item.unitPriceCents,
-      lineTotalCents: item.lineTotalCents,
-    }))
-  );
+    const createdItems = await tx
+      .insert(orderItems)
+      .values(
+        revalidatedItems.map((item) => ({
+          orderId: newOrder.id,
+          productId: item.productId,
+          productNameSnapshot: item.productNameSnapshot,
+          optionsSnapshot: item.selectedOptions,
+          quantity: item.quantity,
+          unitPriceCents: item.unitPriceCents,
+          lineTotalCents: item.lineTotalCents,
+        }))
+      )
+      .returning({ id: orderItems.id });
+
+    // Commit staged artwork files to order_files for items that have one.
+    const filesToInsert = revalidatedItems
+      .map((item, i) =>
+        item.artworkFile
+          ? {
+              orderItemId: createdItems[i].id,
+              storagePath: item.artworkFile.storagePath,
+              originalFilename: item.artworkFile.filename,
+              mimeType: item.artworkFile.mimeType,
+              sizeBytes: item.artworkFile.sizeBytes,
+              status: "pending_review" as const,
+            }
+          : null
+      )
+      .filter((f): f is NonNullable<typeof f> => f !== null);
+
+    if (filesToInsert.length > 0) {
+      await tx.insert(orderFiles).values(filesToInsert);
+    }
+
+    return [newOrder];
+  });
 
   // 5. Create Stripe Checkout Session.
   // If Stripe throws, mark the order cancelled so it does not sit as a stray

@@ -78,6 +78,50 @@ export function calculatePrice(input: PricingInput): PricingResult {
   return { unitPrice, lineTotal, tierApplied };
 }
 
+// ---------------------------------------------------------------------------
+// Bundle pricing
+// Per-item costs fetched individually; bundle-level margin calculated here.
+// ---------------------------------------------------------------------------
+
+export interface BundleLineItem {
+  printSpecId: string;
+  unitPriceCents: number;
+  quantity: number;
+}
+
+export interface BundlePricingInput {
+  items: BundleLineItem[];
+  bundleDiscountPercent?: number; // 0–100; e.g. 10 = 10% off item subtotal
+}
+
+export interface BundlePricingResult {
+  itemSubtotalCents: number; // sum of (unitPriceCents × quantity) per item
+  discountCents: number;     // savings from bundle discount
+  bundleTotalCents: number;  // itemSubtotalCents − discountCents
+}
+
+/**
+ * Computes the bundle total after an optional percentage discount.
+ * Pricing logic lives here only — never in components or API routes.
+ */
+export function calculateBundlePrice(
+  input: BundlePricingInput
+): BundlePricingResult {
+  const { items, bundleDiscountPercent = 0 } = input;
+  const itemSubtotalCents = items.reduce(
+    (sum, item) => sum + item.unitPriceCents * item.quantity,
+    0
+  );
+  const discountCents = Math.round(
+    itemSubtotalCents * (Math.min(100, Math.max(0, bundleDiscountPercent)) / 100)
+  );
+  return {
+    itemSubtotalCents,
+    discountCents,
+    bundleTotalCents: itemSubtotalCents - discountCents,
+  };
+}
+
 /**
  * Formats a cent value as a USD string (e.g. 1050 → "$10.50").
  * UI helper — keep formatting out of business logic callers.

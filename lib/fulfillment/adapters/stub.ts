@@ -1,6 +1,6 @@
 // StubAdapter — development/testing only.
 // Returns hardcoded responses without making any real API calls.
-// Registered unconditionally in config.ts; Phase D will gate it behind NODE_ENV.
+// Registered in config.ts only when NODE_ENV !== "production".
 
 import type {
   FulfillmentAdapter,
