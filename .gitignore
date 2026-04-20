@@ -29,3 +29,5 @@ tsconfig.tsbuildinfo
 
 # Local assets folder (not part of the app)
 paprintpo landing page/
+
+.vercel

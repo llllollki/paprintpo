@@ -101,6 +101,11 @@ const catalog = [
 // ---------------------------------------------------------------------------
 
 async function seed() {
+  // Clear dependent tables first to avoid FK violations on re-seed
+  await db.delete(bundleItems);
+  await db.delete(bundles);
+  await db.delete(printSpecs);
+
   console.log("Seeding catalog…");
 
   for (const item of catalog) {
@@ -154,10 +159,6 @@ async function seed() {
   console.log("\nSeeding print specs…");
 
   for (const spec of Object.values(PRINT_SPECS)) {
-    await db
-      .delete(printSpecs)
-      .where(eq(printSpecs.id, spec.id));
-
     await db.insert(printSpecs).values({
       id: spec.id,
       productType: spec.productType,

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useCart } from "@/lib/cart";
 import { formatCents } from "@/lib/pricing";
 import type { BundleWithItems } from "./page";
@@ -506,9 +507,9 @@ export function QuickPreviewClient({ bundles }: { bundles: BundleWithItems[] }) 
       <div className="mt-12 text-center">
         <p className="text-sm" style={{ color: "var(--ink-soft)" }}>
           Want to configure products individually?{" "}
-          <a href="/products" className="font-semibold hover:underline" style={{ color: "var(--violet)" }}>
+          <Link href="/products" className="font-semibold hover:underline" style={{ color: "var(--violet)" }}>
             Browse all products
-          </a>
+          </Link>
         </p>
       </div>
     </div>
