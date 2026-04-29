@@ -1,5 +1,133 @@
 # Decision Log
 
+---
+
+## 2026-04-28 — USA-first branded print kit pivot
+
+### Business pivot
+
+Paprintpo is pivoting from a general print bundle platform to a **USA-first branded print kit platform for very small businesses**, with the positioning: *"Instant branded print kits for very small businesses."*
+
+Flagship promise: **Upload once / brand everywhere / reorder easily.**
+
+**Old concept superseded:**
+- Framing as a generic print marketplace → replaced by workflow-first, kit-driven experience
+- Cloudprinter as the only MVP vendor → replaced by category-routed MVP fulfillment (one preferred vendor per product category)
+- Flyers, brochures, banners, posters as core products → replaced by cards, stickers, labels, inserts, and packaging-adjacent collateral as the repeat-purchase engine
+
+### New product focus
+
+Repeat-purchase engine products (primary): business / company cards, stickers (die-cut, kiss-cut, sheet), product labels, roll labels, QR/contact cards, thank-you cards, inserts, box/mailer stickers, packaging tape, tissue paper, mailers/packaging (where vendor API confirmed).
+
+Business cards remain important as a trust-builder and entry product — but are not the sole focus.
+
+### New bundle catalog (replaces Starter Brand Kit / Local Promo Kit / Repeat Customer Kit)
+
+| Bundle | Contents |
+|---|---|
+| Launch Kit | Business cards + logo stickers + QR/contact cards + thank-you cards |
+| Ecommerce Starter Kit | Roll labels + mailer/box stickers + thank-you inserts + return/QR cards |
+| Local Service Kit | Business cards + appointment/reminder cards + review-request cards |
+| Market Booth Kit | Price/menu cards + stickers + loyalty cards |
+| Reorder Kit | Replenishment of past approved items |
+
+**Action required:** Update bundle seed data in `scripts/seed.ts` and migrate `bundles` / `bundle_items` tables.
+
+### Category-routed MVP fulfillment
+
+MVP model: one preferred vendor per product category. Static routing table at MVP — no automated multi-vendor optimization, bidding, or split routing.
+
+| Category | Preferred vendor | Status |
+|---|---|---|
+| `business_cards` | **Unconfirmed** — Prodigi "coming soon" as of 2026-04-28; Cloudprinter or Gooten as interim | Needs confirmation |
+| `stickers_labels` | Printify or Printful (evaluate both) | Needs confirmation |
+| `packaging` | Packhelp | Sales-gated / quote-assisted until API + USA production confirmed |
+
+**Critical finding:** Prodigi business cards are listed as "Coming soon" on prodigi.com and are not yet purchasable. The original assumption that Prodigi is ready for MVP business card fulfillment is incorrect. Evaluate Cloudprinter or Gooten as interim business card vendors.
+
+**Critical finding:** Sticker Mule does not offer an API for order placement (FAQ confirmed). Do not include Sticker Mule as a vendor candidate.
+
+**Critical finding:** Packhelp appears to be sales-led / EU-first. USA fulfillment, DTC direct shipment, and self-serve API order placement are all unconfirmed. Treat as quote-assisted / manual until confirmed.
+
+### Vendor findings summary
+
+- **Prodigi**: strong API, quote endpoint, CloudEvents webhooks, US labs, artwork via URL — but business cards not yet available
+- **Cloudprinter**: quote endpoint (48hr expiry), US print network, webhooks via CloudSignal — more enterprise/onboarding-heavy; DTC model unconfirmed
+- **Gelato**: strong API, quote API, webhooks, white-label, cards/stationery — packaging = inserts/labels only, not full custom boxes
+- **Printful**: API orders, cost estimate endpoint, webhooks, white-label capable — sticker/label SKU depth needs confirmation
+- **Printify**: API orders, shipping cost API, provider choice, webhooks — provider-dependent quality; sticker/label SKUs need confirmation
+- **Packhelp**: strongest packaging fit, low MOQs, white-label store option — but sales-led, EU-first, USA fulfillment and DTC API unconfirmed
+- **Gooten**: API orders, price/shipping estimates, webhooks, white-label — cards and stickers reported; needs SKU + margin verification
+- **Lob**: direct mail only — out of scope unless direct mail becomes a product line
+- **Sticker Mule, MOO, Packlane, Arka, PakFactory**: competitor/reference or manual/partnership candidates; no confirmed API order placement
+
+Full details: `docs/vendors/vendor-research.md`
+
+### Vendor adapter architecture
+
+Thin adapter contract (6 methods): `quote`, `validateArtwork`, `submitOrder`, `cancelIfAllowed`, `getStatus`, `handleWebhook`. Normalize quotes to `NormalizedQuote` model — not entire catalogs. Store raw vendor payloads. Store every webhook event.
+
+Adding a new vendor adapter requires: explicit approval + `@spawn:` review + `vendor_product_mappings` migration + registered adapter identifier.
+
+### Fulfillment lifecycle (target-state direction — not yet implemented)
+
+The 19-state lifecycle below is the **product-direction goal**, recorded here as a pivot decision. The current codebase still runs the old 8-state machine. Implementing the target lifecycle requires a separate cluster review, schema migration, and status-transition code updates across service, adapters, admin, and webhook handlers.
+
+Old (currently implemented): `pending → paid → artwork_review → proof_sent → proof_approved → in_production → shipped → complete` + `payment_failed`, `cancelled`, `fulfillment_failed`, `submitted_to_vendor`
+
+Target direction:
+```
+draft → artwork_uploaded → preflight_pending → preflight_passed | preflight_failed
+  → quote_requested → quote_selected → payment_authorized
+  → submitted_to_vendor → vendor_accepted | vendor_rejected
+  → in_production → shipped | partially_shipped → delivered
+```
+Terminal/exception (target): `admin_exception`, `canceled`, `refunded`, `reprint_requested`
+
+Key distinctions over old machine: explicit preflight states separate from artwork review; vendor acceptance vs. internal validation clearly separated; partial shipment; vendor rejection as first-class state; deposit/invoice path for packaging.
+
+Full current-vs-target documentation: `docs/product-brief.md` › Fulfillment Lifecycle.
+
+### Documentation restructured
+
+| File | Change |
+|---|---|
+| `CLAUDE.md` | Rewritten to 10 lines; imports `@AGENTS.md`; Claude-specific notes only |
+| `AGENTS.md` | Created — short cross-agent entrypoint with reference map, read triggers, working rules, condensed agent roster |
+| `docs/product-brief.md` | Created — durable business strategy: positioning, customers, products, bundles, workflow, architecture, fulfillment lifecycle, prepress, payment rules, business rules |
+| `docs/project-state.md` | Created — implementation state, stale assumptions, blockers, next priorities, open questions |
+| `docs/decision-log.md` | Updated — pivot entry added (this entry) |
+| `docs/vendors/vendor-research.md` | Created — vendor validation matrix with all candidates |
+| `docs/market/competitive-landscape.md` | Created — competitive assessment from Paprintpo's perspective |
+
+### Old assumptions now superseded (do not implement)
+
+- Cloudprinter as the only fulfillment adapter
+- Flyers, posters, brochures as primary product types
+- Starter Brand Kit / Local Promo Kit / Repeat Customer Kit bundle definitions
+- Simple 8-state order status machine as canonical lifecycle
+- `fulfillment_provider` enum column (replaced by `fulfillment_selection` JSONB in implementation)
+
+---
+
+## 2026-04-28 — Proxy bundle specs are temporary compatibility placeholders
+
+The four bundles seeded by the 2026-04-28 alignment pass (Launch Kit, Ecommerce Starter Kit, Local Service Kit, Market Booth Kit) reference existing `print_spec_id`s as proxies for product types that do not yet have specs. Specifically:
+
+- `reminder_card_250` is used as a proxy for: thank-you cards, QR/contact cards, price/menu cards
+- `loyalty_card_250` is used as a proxy for: QR/return cards
+- `sticker_die_cut_100` is used as a proxy for: mailer stickers / roll labels
+
+**These proxy mappings are not final product architecture.** They are temporary seed data placeholders that allow Quick Preview and bundle display to function while new print specs are defined. They must not be treated as finalized SKUs or as vendor-mappable specs for real fulfillment.
+
+**Public product and bundle copy must not present proxy specs as finalized MVP offerings.** Descriptions are written to name the target product types (e.g., "roll labels, mailer stickers") — but the underlying spec resolves to a die-cut sticker spec until the real spec is added.
+
+**Required before treating any bundle as production-ready:** replace proxy specs with real print specs for each product type, add those specs to `lib/fulfillment/specs.ts`, run `@spawn:` review, write migration, and populate `vendor_product_mappings`.
+
+See `docs/project-state.md` › Next Implementation Plan for the sequenced removal path.
+
+---
+
 ## 2026-04-19 — Bundle/print-spec schema + Quick Preview flow implemented
 
 ### Schema additions (migration 0005)
@@ -72,6 +200,7 @@ Order status enum:
   Plus terminal states: `payment_failed`, `cancelled`
 **Why:** Print jobs require human review of customer artwork before going to press.
 A simple paid/shipped model skips the approval step that prevents costly reprints.
+*Note: This 8-state machine was superseded on 2026-04-28 by the richer 19-state fulfillment lifecycle — see pivot entry above.*
 
 ### Refinement 3: Pricing logic decoupled from product options
 `lib/pricing.ts` — pure pricing calculation, no UI dependencies  
@@ -160,7 +289,7 @@ optionModifiers, and tiers. If the new quantity crosses a tier threshold (e.g. f
 `lineTotalCents` is always `unitPriceCents × quantity`.
 
 ### Persistence — localStorage
-CartItems are serialized to `localStorage` under `"print_cart"` on every dispatch.
+CartItems are serialized to `localStorage` under `"paprintpo_cart"` on every dispatch.
 On mount, the CartProvider reads and hydrates. `hydrated: boolean` is exposed in
 context so the cart page can avoid rendering stale empty-state before hydration.
 
@@ -227,7 +356,7 @@ Prevents a partial state where the order exists but has no items if the second i
 ### Margin floor — `lib/fulfillment/config.ts`
 `MIN_MARGIN_CENTS = 500` ($5.00). `submitToVendor()` throws before calling the
 adapter if the selected quote's margin falls below this threshold. Adjust before
-go-live once real Cloudprinter costs are known.
+go-live once real vendor costs are known.
 
 ### Security headers — `next.config.ts`
 Added `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`,
@@ -255,7 +384,7 @@ handlers now only transition from the expected prior state.
 ### Order status machine enforcement — admin actions
 `FULFILLMENT_MANAGED` in `actions.ts` and `page.tsx` now includes `in_production`
 and `shipped`. Previously those two states were omittable from the blocked list,
-allowing admins to set them directly — violating the CLAUDE.md rule that only vendor
+allowing admins to set them directly — violating the rule that only vendor
 webhooks may set those statuses.
 
 ### Startup env validation — `lib/env.ts`
@@ -289,7 +418,7 @@ Product vendor mappings are now batch-loaded in a single query before the adapte
 loop, then filtered per-adapter in memory. Previously: one DB query per adapter.
 
 ### Schema additions — `quick_preview_enabled` + `preview_sessions`
-`products.quick_preview_enabled` boolean added per CLAUDE.md spec. `preview_sessions`
+`products.quick_preview_enabled` boolean added per spec. `preview_sessions`
 table added for the Quick Preview feature. Migration: `drizzle/0004_add_quick_preview_enabled_and_preview_sessions.sql`.
 Seed script updated to mark business cards, stickers, and flyers as Quick Preview eligible.
 RLS policy for `preview_sessions` added to `drizzle/rls_policies.sql`.
@@ -310,10 +439,7 @@ The Quick Preview feature spec was updated to align with Paprintpo's bundle prod
 
 **Why:** Paprintpo's value proposition is coordinated branded collateral, not individual product SKU selection. Showing bundles in Quick Preview communicates the "full kit" story immediately. Individual product browsing remains available via `/products`.
 
-**Key implementation notes added to CLAUDE.md:**
-- `bundleId` + `bundleName` fields added to `CartItem` spec (not yet implemented in code — requires bundles schema `@spawn:` review first)
-- Cart groups items by `bundleId` for display; checkout is unchanged
-- Same `storage_path` referenced by all items in a bundle session — single upload, multiple `order_files` rows at checkout
+*Note: Bundle names (Starter Brand Kit, Local Promo Kit, Repeat Customer Kit) were superseded on 2026-04-28 by the new bundle catalog — see pivot entry above.*
 
 ## 2026-04-19 — Paprintpo rebrand + vendor-agnostic fulfillment architecture
 
@@ -324,10 +450,10 @@ from `"print_cart"` to `"paprintpo_cart"` — existing carts in older browser se
 will clear on first load (expected; no data loss risk since cart is ephemeral).
 
 ### Vendor-agnostic fulfillment architecture
-CLAUDE.md updated to require a routing layer between domain code and vendor adapters.
+Updated to require a routing layer between domain code and vendor adapters.
 Rules: adapters must never be imported outside `router.ts`; all fulfillment calls go
-through the router. This enforces the abstraction at MVP so adding Gelato or a local
-vendor post-MVP does not require touching `service.ts`.
+through the router. This enforces the abstraction at MVP so adding a second vendor
+post-MVP does not require touching `service.ts`.
 
 **New files:**
 - `lib/fulfillment/router.ts` — routing engine; the only module that imports from
@@ -338,18 +464,11 @@ vendor post-MVP does not require touching `service.ts`.
 
 **Updated files:**
 - `lib/fulfillment/types.ts` — added `NormalizedQuoteResult` (vendor-agnostic shape)
-- `lib/fulfillment/service.ts` — now imports from `router.ts` only; `./config` import
-  removed (router.ts handles adapter registration at import time)
+- `lib/fulfillment/service.ts` — now imports from `router.ts` only
 
-### Schema additions — require @spawn: review (NOT yet implemented)
-Per CLAUDE.md, these tables require `@spawn:` review before migrations are written:
-- `bundles` — bundle definitions (Starter Brand Kit, Local Promo Kit, Repeat Customer Kit)
-- `bundle_items` — maps bundles to internal print specs
-- `print_specs` — Paprintpo-canonical specs (mirrored from `lib/fulfillment/specs.ts`)
-- `vendor_product_mappings` — rename of existing `product_vendor_mappings`; new columns:
-  `print_spec_id` replaces `product_id` as the mapping key
-- `brand_profiles` — business name, logo, address, phone, website, social, tagline; PII;
-  RLS required; logo in private Supabase Storage bucket
+### Schema additions — require @spawn: review (NOT yet implemented at this date)
+- `bundles`, `bundle_items`, `print_specs`, `vendor_product_mappings`, `brand_profiles`
+  (implemented in migration 0005 — see 2026-04-19 bundle/spec schema entry above)
 
 ## 2026-04-19 — Artwork upload moved to configurator (pre-checkout)
 
@@ -378,7 +497,7 @@ cleaned up by the same TTL cron as `preview_sessions` (deferred).
 
 ## 2026-04-19 — fulfillment_failed recovery fix
 
-### Bug: admin locked out after fulfillment_failed (COO + Business Analyst + DevOps/QA)
+### Bug: admin locked out after fulfillment_failed
 `fulfillment_failed` was in `FULFILLMENT_MANAGED` in `page.tsx`, causing the status
 dropdown to be replaced with a read-only "managed by fulfillment system" message.
 Combined with `canRequest = status === "proof_approved"` in the panel, the admin
@@ -389,7 +508,7 @@ had no recovery path: couldn't reset status, couldn't re-request quotes.
   array. `actions.ts` `FULFILLMENT_MANAGED` unchanged — system remains the only writer
   of this status; admins still can't set orders *to* `fulfillment_failed` via the dropdown.
 - `_fulfillment-panel.tsx`: Extended `canRequest` to include `fulfillment_failed` so
-  the Re-request Quotes button shows. `canSubmit` still requires `proof_approved`
-  (per CLAUDE.md constraint); retry flow is: re-request → select → reset status → submit.
+  the Re-request Quotes button shows. `canSubmit` still requires `proof_approved`;
+  retry flow is: re-request → select → reset status → submit.
 - `lib/fulfillment/service.ts`: Added status guards — `requestQuotes()` allows
   `proof_approved | fulfillment_failed`; `submitToVendor()` requires `proof_approved`.

@@ -123,8 +123,10 @@ async function seed() {
     }
 
     // Insert product
-    // Per CLAUDE.md: business cards, stickers, and flyers are Quick Preview eligible.
-    const QUICK_PREVIEW_SLUGS = ["standard-business-card", "die-cut-sticker", "half-page-flyer"];
+    // Quick Preview eligible: business cards and stickers are the MVP preview products.
+    // Flyer removed: flyers are not an MVP-focus product type (see docs/product-brief.md).
+    // Add new product slugs here when roll-label, QR-card, and label specs are added.
+    const QUICK_PREVIEW_SLUGS = ["standard-business-card", "die-cut-sticker"];
     const [product] = await db
       .insert(products)
       .values({
@@ -175,44 +177,69 @@ async function seed() {
   }
 
   // ---------------------------------------------------------------------------
-  // Bundles — Starter Brand Kit, Local Promo Kit, Repeat Customer Kit
+  // Bundles — Launch Kit, Ecommerce Starter Kit, Local Service Kit, Market Booth Kit
+  //
+  // NOTE: Items are mapped to existing print_spec_ids. Several target-state product
+  // types (roll labels, QR cards, thank-you cards, price/menu cards, mailer stickers)
+  // do not have print specs yet. Closest existing specs are used as proxies until
+  // those specs are added. See docs/project-state.md › Remaining Implementation Gaps.
+  //
+  // Reorder Kit is not seeded: it is per-user (order history) and cannot be a
+  // static bundle. Implement as a dedicated reorder workflow (post-MVP).
   // ---------------------------------------------------------------------------
   console.log("\nSeeding bundles…");
 
   const BUNDLE_DEFS = [
     {
-      slug: "starter-brand-kit",
-      name: "Starter Brand Kit",
-      description: "Everything a new business needs to make a first impression — business cards, stickers, and reminder cards in one coordinated package.",
+      slug: "launch-kit",
+      name: "Launch Kit",
+      description: "Business cards, logo stickers, QR/contact cards, and thank-you cards — everything a new business needs to make its brand visible from day one.",
       price: 16900, // $169.00
+      // Target: business_card_standard_250 + sticker_die_cut_100 + qr_card_250 + thank_you_card_250
+      // Proxy: reminder_card_250 used for both QR/contact cards and thank-you cards until specs exist
       items: [
         "business_card_standard_250",
         "sticker_die_cut_100",
+        "loyalty_card_250",   // proxy for QR/contact card spec (pending)
+        "reminder_card_250",  // proxy for thank-you card spec (pending)
+      ],
+    },
+    {
+      slug: "ecommerce-starter-kit",
+      name: "Ecommerce Starter Kit",
+      description: "Roll labels, mailer stickers, thank-you inserts, and return cards — coordinated branded packaging that turns Shopify and Etsy orders into repeat customers.",
+      price: 14900, // $149.00
+      // Target: roll_label_100 + mailer_sticker_100 + insert_250 + return_card_250
+      // Proxy: sticker_die_cut_100 (mailer sticker), reminder_card_250 (insert), loyalty_card_250 (return card)
+      // Roll label spec is pending — sticker used as interim placeholder
+      items: [
+        "sticker_die_cut_100",  // proxy for mailer sticker / roll label spec (pending)
+        "reminder_card_250",    // proxy for thank-you insert spec (pending)
+        "loyalty_card_250",     // proxy for return/QR card spec (pending)
+      ],
+    },
+    {
+      slug: "local-service-kit",
+      name: "Local Service Kit",
+      description: "Business cards, appointment/reminder cards, and loyalty cards — keep customers coming back and leave every visit memorable.",
+      price: 12900, // $129.00
+      items: [
+        "business_card_standard_250",
         "reminder_card_250",
-      ],
-    },
-    {
-      slug: "local-promo-kit",
-      name: "Local Promo Kit",
-      description: "Promote your business in the neighborhood — business cards, flyers, a poster, and stickers to cover all surfaces.",
-      price: 19900, // $199.00
-      items: [
-        "business_card_standard_250",
-        "flyer_basic_250",
-        "poster_standard_1",
-        "sticker_die_cut_100",
-      ],
-    },
-    {
-      slug: "repeat-customer-kit",
-      name: "Repeat Customer Kit",
-      description: "Built for retention — business cards, loyalty cards, reminder cards, and flyers to keep customers coming back.",
-      price: 26900, // $269.00
-      items: [
-        "business_card_standard_250",
         "loyalty_card_250",
-        "reminder_card_250",
-        "flyer_basic_250",
+      ],
+    },
+    {
+      slug: "market-booth-kit",
+      name: "Market Booth Kit",
+      description: "Price and menu cards, logo stickers, and loyalty cards — everything a maker or market vendor needs to run a professional booth.",
+      price: 14900, // $149.00
+      // Target: price_menu_card_250 + sticker_die_cut_100 + loyalty_card_250
+      // Proxy: reminder_card_250 used for price/menu card spec (pending)
+      items: [
+        "reminder_card_250",  // proxy for price/menu card spec (pending)
+        "sticker_die_cut_100",
+        "loyalty_card_250",
       ],
     },
   ];

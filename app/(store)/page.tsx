@@ -1,45 +1,55 @@
 import Link from "next/link";
 import Image from "next/image";
 
+// MVP product categories — only categories with seeded products are surfaced here.
+// Flyers, Banners, Brochures, Posters removed from nav per 2026-04-28 pivot.
+// Routes (e.g. /products/flyers) remain functional via direct URL.
+// Add new categories (labels, QR cards, etc.) once their products exist in the DB.
 const CATEGORIES = [
   { slug: "business-cards", label: "Business Cards", emoji: "💼", color: "from-[#e8f4ff] to-[#c9e2ff]" },
-  { slug: "flyers",         label: "Flyers",         emoji: "📄", color: "from-[#fff3e0] to-[#ffd599]" },
   { slug: "stickers",       label: "Stickers",       emoji: "🏷️", color: "from-[#e0fff7] to-[#a0f0d8]" },
-  { slug: "banners",        label: "Banners",        emoji: "🎉", color: "from-[#f3e8ff] to-[#d8b4fe]" },
-  { slug: "brochures",      label: "Brochures",      emoji: "📑", color: "from-[#fff0f0] to-[#ffc9c9]" },
-  { slug: "posters",        label: "Posters",        emoji: "🖼️", color: "from-[#e8fff0] to-[#b9f2cc]" },
 ];
 
 const BUNDLES = [
   {
-    slug: "starter-brand-kit",
-    name: "Starter Brand Kit",
-    tagline: "For new businesses",
-    description: "Business cards, stickers, and reminder cards — everything you need to make a first impression.",
-    items: ["Business Cards (250)", "Die-Cut Stickers (100)", "Reminder Cards (250)"],
+    slug: "launch-kit",
+    name: "Launch Kit",
+    tagline: "New business essentials",
+    description: "Business cards, logo stickers, QR/contact cards, and thank-you cards — everything you need to make your brand visible from day one.",
+    items: ["Business Cards (250)", "Die-Cut Stickers (100)", "QR / Contact Cards (250)", "Thank-You Cards (250)"],
     price: "$169",
     color: "from-[#e8f4ff] to-[#d4c9f8]",
     accent: "var(--violet)",
   },
   {
-    slug: "local-promo-kit",
-    name: "Local Promo Kit",
-    tagline: "For local marketing",
-    description: "Cards, flyers, a poster, and stickers — cover every surface in your neighborhood.",
-    items: ["Business Cards (250)", "Flyers (250)", "Poster (1)", "Stickers (100)"],
-    price: "$199",
+    slug: "ecommerce-starter-kit",
+    name: "Ecommerce Starter Kit",
+    tagline: "For Shopify & Etsy sellers",
+    description: "Roll labels, mailer stickers, thank-you inserts, and return cards — coordinated branded packaging that turns orders into repeat customers.",
+    items: ["Roll Labels (100)", "Mailer Stickers (100)", "Thank-You Inserts (250)", "Return / QR Cards (250)"],
+    price: "$149",
+    color: "from-[#e0fff7] to-[#a0f0d8]",
+    accent: "#0d7a5c",
+  },
+  {
+    slug: "local-service-kit",
+    name: "Local Service Kit",
+    tagline: "For local businesses",
+    description: "Business cards, appointment cards, and loyalty cards — keep customers coming back and leave every visit memorable.",
+    items: ["Business Cards (250)", "Appointment Cards (250)", "Loyalty Cards (250)"],
+    price: "$129",
     color: "from-[#fff3e0] to-[#ffd599]",
     accent: "#c97d10",
   },
   {
-    slug: "repeat-customer-kit",
-    name: "Repeat Customer Kit",
-    tagline: "For customer retention",
-    description: "Cards, loyalty cards, reminder cards, and flyers — built to bring customers back.",
-    items: ["Business Cards (250)", "Loyalty Cards (250)", "Reminder Cards (250)", "Flyers (250)"],
-    price: "$269",
-    color: "from-[#e8fff0] to-[#b9f2cc]",
-    accent: "#166534",
+    slug: "market-booth-kit",
+    name: "Market Booth Kit",
+    tagline: "For makers & market vendors",
+    description: "Price and menu cards, logo stickers, and loyalty cards — everything you need to run a professional market booth.",
+    items: ["Price / Menu Cards (250)", "Logo Stickers (100)", "Loyalty Cards (250)"],
+    price: "$149",
+    color: "from-[#f3e8ff] to-[#d8b4fe]",
+    accent: "#6d28d9",
   },
 ];
 
@@ -67,7 +77,7 @@ export default function HomePage() {
               style={{ color: "var(--amber-lt, #ffd07b)" }}
             >
               <span className="inline-block w-6 h-0.5 rounded" style={{ background: "var(--amber-lt, #ffd07b)" }} />
-              Professional Print Services
+              Branded Print Kits for Small Business
             </p>
 
             <h1
@@ -79,8 +89,8 @@ export default function HomePage() {
             </h1>
 
             <p className="text-base mb-9 leading-[1.78]" style={{ color: "rgba(255,255,255,0.76)", maxWidth: 440 }}>
-              Business cards, flyers, banners and more — crafted with precision,
-              delivered fast. Upload your design and get your order in days.
+              Business cards, stickers, labels, and more — your brand on everything,
+              delivered fast. Upload your artwork once and preview your whole kit instantly.
             </p>
 
             <div className="flex flex-wrap gap-3">
@@ -164,7 +174,7 @@ export default function HomePage() {
                 See Your Logo on Everything — Before You Order
               </h2>
               <p className="text-sm leading-[1.78] mb-6" style={{ color: "var(--ink-soft)" }}>
-                Upload your artwork once and instantly preview it on business cards, flyers, stickers, and more — all in a coordinated bundle. No design skills needed.
+                Upload your logo or artwork once and instantly preview it across an entire branded kit — business cards, stickers, labels, and more. No design skills needed.
               </p>
               <Link
                 href="/quick-preview"
@@ -176,7 +186,7 @@ export default function HomePage() {
               </Link>
             </div>
             <div className="flex-shrink-0 flex gap-3">
-              {["💼", "📄", "🏷️"].map((emoji, i) => (
+              {["💼", "🏷️", "📦"].map((emoji, i) => (
                 <div
                   key={i}
                   className="w-16 h-20 rounded-xl flex items-center justify-center text-2xl shadow-md"
@@ -208,7 +218,7 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             {BUNDLES.map((bundle) => (
               <div
                 key={bundle.slug}
@@ -280,15 +290,14 @@ export default function HomePage() {
               className="font-extrabold tracking-[-0.025em] leading-[1.15]"
               style={{ fontSize: "clamp(1.75rem, 3.5vw, 2.5rem)", fontFamily: "var(--font-head)" }}
             >
-              Everything You Need to Print
+              Shop by Category
             </h2>
             <p className="mt-3.5 text-base leading-[1.78] mx-auto max-w-lg" style={{ color: "var(--ink-soft)" }}>
-              From quick-turn business cards to large-format banners — browse our
-              full catalog and configure your order in minutes.
+              Business cards, stickers, labels, and more — configure your order in minutes, or start with a ready-made kit.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             {CATEGORIES.map((cat) => (
               <Link
                 key={cat.slug}
@@ -347,7 +356,7 @@ export default function HomePage() {
               Get Your Order Started Today
             </h2>
             <p className="mt-2.5 text-[15px] leading-[1.68]" style={{ color: "rgba(15,14,23,0.6)" }}>
-              Upload your artwork, configure your specs, and we&apos;ll handle the rest.
+              Upload your artwork, pick a kit, and we&apos;ll handle the rest.
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -378,7 +387,7 @@ export default function HomePage() {
                 <Image src="/logo.png" alt="Paprintpo" width={150} height={30} className="h-[30px] w-auto object-contain" />
               </div>
               <p className="text-[13px] leading-[1.75]">
-                Professional printing made simple — quality products, fast delivery.
+                Branded print kits for small businesses — coordinated materials, fast delivery, easy reorders.
               </p>
             </div>
             <div>

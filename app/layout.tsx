@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Paprintpo — Custom Printing",
-  description: "Custom printing for business cards, banners, flyers, stickers, and more.",
+  description: "Instant branded print kits for small businesses — business cards, stickers, labels, and more. Upload once, preview your brand on everything, reorder easily.",
 };
 
 export default function RootLayout({
