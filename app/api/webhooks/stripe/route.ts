@@ -7,7 +7,7 @@ import Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import { db } from "@/lib/db";
 import { orders } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 export async function POST(request: NextRequest) {
   const rawBody = await request.text();
@@ -26,7 +26,8 @@ export async function POST(request: NextRequest) {
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: `Webhook signature verification failed: ${message}` }, { status: 400 });
+    console.error("Stripe webhook signature verification failed:", message);
+    return NextResponse.json({ error: "Webhook verification failed" }, { status: 400 });
   }
 
   // Handle relevant events
@@ -40,6 +41,9 @@ export async function POST(request: NextRequest) {
         break;
       }
 
+      // Guard: only advance from "pending" → "paid".
+      // Stripe may retry events; without this check a delayed duplicate would
+      // regress an already-paid order (e.g. "artwork_review") back to "paid".
       await db
         .update(orders)
         .set({
@@ -49,7 +53,7 @@ export async function POST(request: NextRequest) {
               ? session.payment_intent
               : (session.payment_intent?.id ?? null),
         })
-        .where(eq(orders.id, orderId));
+        .where(and(eq(orders.id, orderId), eq(orders.status, "pending")));
 
       break;
     }
@@ -62,12 +66,13 @@ export async function POST(request: NextRequest) {
         break;
       }
 
-      // Only move to cancelled if the order is still pending — a completed
-      // session fires completed before expired, so this guards against a race.
+      // Guard against race: only cancel if still pending.
+      // checkout.session.completed fires before expired; without this check
+      // a delayed expired event would regress "paid" → "cancelled".
       await db
         .update(orders)
         .set({ status: "cancelled" })
-        .where(eq(orders.id, orderId));
+        .where(and(eq(orders.id, orderId), eq(orders.status, "pending")));
 
       break;
     }
@@ -75,11 +80,17 @@ export async function POST(request: NextRequest) {
     case "payment_intent.payment_failed": {
       const intent = event.data.object as Stripe.PaymentIntent;
 
-      // Find order by payment_intent ID and mark payment_failed
+      // Guard: only fail if the order is still pending payment.
+      // A stale or delayed failure event must not regress an already-paid order.
       await db
         .update(orders)
         .set({ status: "payment_failed" })
-        .where(eq(orders.stripePaymentIntent, intent.id));
+        .where(
+          and(
+            eq(orders.stripePaymentIntent, intent.id),
+            eq(orders.status, "pending")
+          )
+        );
 
       break;
     }

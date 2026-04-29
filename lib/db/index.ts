@@ -1,6 +1,7 @@
 // Database client — Drizzle over postgres (node-postgres driver).
 // Import db from here throughout the app; never instantiate a second client.
 
+import "@/lib/env"; // validates required env vars at startup
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema";

@@ -20,3 +20,14 @@ Thumbs.db
 # Editor
 .vscode/
 *.swp
+
+# TypeScript build info
+tsconfig.tsbuildinfo
+
+# Claude Code local config
+.claude/
+
+# Local assets folder (not part of the app)
+paprintpo landing page/
+
+.vercel

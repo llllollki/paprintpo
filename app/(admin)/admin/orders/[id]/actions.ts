@@ -1,6 +1,7 @@
 "use server";
 
 // Server actions for the admin order detail page.
+// Every action calls requireAdmin() first — defence-in-depth on top of middleware.
 // updateOrderStatus      — advances workflow status (Stripe/fulfillment-managed blocked).
 // updateFileStatus       — approves or rejects an uploaded artwork file.
 // requestQuotesAction    — triggers quote requests from all registered adapters.
@@ -10,9 +11,27 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
-import { orders, orderFiles, ORDER_STATUSES } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { orders, orderItems, orderFiles, ORDER_STATUSES } from "@/lib/db/schema";
+import { eq, and } from "drizzle-orm";
 import { requestQuotes, submitToVendor } from "@/lib/fulfillment/service";
+import { createClient } from "@/lib/supabase/server";
+
+// ---------------------------------------------------------------------------
+// Auth guard — re-verified on every action (middleware is page-level only)
+// ---------------------------------------------------------------------------
+
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS ?? "")
+  .split(",")
+  .map((e) => e.trim())
+  .filter(Boolean);
+
+async function requireAdmin(): Promise<void> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user?.email || !ADMIN_EMAILS.includes(user.email)) {
+    throw new Error("Unauthorized");
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Order status
@@ -26,6 +45,8 @@ const STRIPE_MANAGED: (typeof ORDER_STATUSES)[number][] = [
 const FULFILLMENT_MANAGED: (typeof ORDER_STATUSES)[number][] = [
   "submitted_to_vendor",
   "fulfillment_failed",
+  "in_production", // set by vendor webhook only — admin must not override
+  "shipped",       // set by vendor webhook only — admin must not override
 ];
 
 const ADMIN_SETTABLE = ORDER_STATUSES.filter(
@@ -38,6 +59,8 @@ const UpdateStatusSchema = z.object({
 });
 
 export async function updateOrderStatus(formData: FormData) {
+  await requireAdmin();
+
   const parsed = UpdateStatusSchema.safeParse({
     orderId: formData.get("orderId"),
     status: formData.get("status"),
@@ -61,21 +84,34 @@ export async function updateOrderStatus(formData: FormData) {
 // ---------------------------------------------------------------------------
 
 const UpdateFileStatusSchema = z.object({
-  fileId: z.string().uuid(),
+  fileId:  z.string().uuid(),
   orderId: z.string().uuid(),
-  status: z.enum(["approved", "rejected"]),
+  status:  z.enum(["approved", "rejected"]),
 });
 
 export async function updateFileStatus(formData: FormData) {
+  await requireAdmin();
+
   const parsed = UpdateFileStatusSchema.safeParse({
-    fileId: formData.get("fileId"),
+    fileId:  formData.get("fileId"),
     orderId: formData.get("orderId"),
-    status: formData.get("status"),
+    status:  formData.get("status"),
   });
 
   if (!parsed.success) return;
 
   const { fileId, orderId, status } = parsed.data;
+
+  // Ownership check: verify the file actually belongs to this order.
+  // Prevents IDOR — an admin can only approve/reject files on the order they're viewing.
+  const fileRows = await db
+    .select({ id: orderFiles.id })
+    .from(orderFiles)
+    .innerJoin(orderItems, eq(orderFiles.orderItemId, orderItems.id))
+    .where(and(eq(orderFiles.id, fileId), eq(orderItems.orderId, orderId)))
+    .limit(1);
+
+  if (fileRows.length === 0) return;
 
   await db
     .update(orderFiles)
@@ -90,6 +126,8 @@ export async function updateFileStatus(formData: FormData) {
 // ---------------------------------------------------------------------------
 
 export async function requestQuotesAction(formData: FormData) {
+  await requireAdmin();
+
   const orderId = formData.get("orderId");
   if (!z.string().uuid().safeParse(orderId).success) return;
 
@@ -109,6 +147,8 @@ const SelectVendorSchema = z.object({
 });
 
 export async function selectVendorAction(formData: FormData) {
+  await requireAdmin();
+
   const parsed = SelectVendorSchema.safeParse({
     orderId:    formData.get("orderId"),
     quoteId:    formData.get("quoteId"),
@@ -133,6 +173,8 @@ export async function selectVendorAction(formData: FormData) {
 // ---------------------------------------------------------------------------
 
 export async function submitToVendorAction(formData: FormData) {
+  await requireAdmin();
+
   const orderId = formData.get("orderId");
   if (!z.string().uuid().safeParse(orderId).success) return;
 

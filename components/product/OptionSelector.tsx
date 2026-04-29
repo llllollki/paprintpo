@@ -26,9 +26,7 @@ interface OptionSelectorProps {
   onChange: (groupName: string, value: string) => void;
 }
 
-function toLabel(groupName: string): string {
-  return groupName.charAt(0).toUpperCase() + groupName.slice(1).replace(/-/g, " ");
-}
+import { toLabel } from "@/lib/format";
 
 export function OptionSelector({
   options,
@@ -39,14 +37,15 @@ export function OptionSelector({
     <div className="space-y-4">
       {options.map((group) => (
         <div key={group.id}>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-semibold mb-1.5" style={{ color: "var(--ink)", fontFamily: "var(--font-head)" }}>
             {toLabel(group.name)}
           </label>
           <select
             value={selected[group.name] ?? ""}
             onChange={(e) => onChange(group.name, e.target.value)}
             required={group.required}
-            className="block w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
+            className="block w-full rounded-lg px-3.5 py-2.5 text-sm outline-none"
+            style={{ border: "1.5px solid var(--border)", color: "var(--ink)", background: "white" }}
           >
             <option value="" disabled>
               Select {toLabel(group.name)}

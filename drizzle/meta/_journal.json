@@ -29,6 +29,20 @@
       "when": 1776215583399,
       "tag": "0003_regular_zarda",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1776570235470,
+      "tag": "0004_add_quick_preview_enabled_and_preview_sessions",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1745020800000,
+      "tag": "0005_add_bundles_print_specs",
+      "breakpoints": true
     }
   ]
 }

@@ -1,15 +1,10 @@
-// /products/[category] — filtered listing for a single category.
-// Server component: fetches from DB and 404s if the category has no active products.
-
 import { getProductsByCategory } from "@/lib/db/queries";
 import { ProductCard } from "@/components/product/ProductCard";
 import { notFound } from "next/navigation";
+import Link from "next/link";
 
 function toHeading(category: string) {
-  return category
-    .split("-")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
+  return category.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
 }
 
 interface Props {
@@ -23,18 +18,29 @@ export default async function CategoryPage({ params }: Props) {
   if (categoryProducts.length === 0) notFound();
 
   return (
-    <main className="max-w-5xl mx-auto px-4 py-10">
-      <p className="text-sm text-gray-400 mb-1">
-        <a href="/products" className="hover:underline">
+    <main className="max-w-[1100px] mx-auto px-6 py-12">
+      {/* Breadcrumb */}
+      <p className="text-xs mb-4" style={{ color: "var(--ink-soft)" }}>
+        <Link href="/products" className="hover:underline" style={{ color: "var(--violet)" }}>
           All Products
-        </a>{" "}
-        / {toHeading(category)}
-      </p>
-      <h1 className="text-3xl font-bold text-gray-900 mb-8">
+        </Link>
+        {" / "}
         {toHeading(category)}
-      </h1>
+      </p>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="mb-10">
+        <span
+          className="inline-block text-[11px] font-bold uppercase tracking-[0.14em] px-3.5 py-1.5 rounded-full mb-3"
+          style={{ color: "var(--violet)", background: "var(--surface)" }}
+        >
+          {toHeading(category)}
+        </span>
+        <h1 className="text-3xl font-extrabold tracking-tight" style={{ fontFamily: "var(--font-head)", color: "var(--ink)" }}>
+          {toHeading(category)}
+        </h1>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
         {categoryProducts.map((p) => (
           <ProductCard key={p.id} {...p} />
         ))}

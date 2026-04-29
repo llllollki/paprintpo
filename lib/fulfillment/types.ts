@@ -47,6 +47,19 @@ export interface FulfillmentQuoteResult {
   rawResponse?: unknown; // full vendor API response, stored verbatim for auditing
 }
 
+// Normalized quote model — router normalizes all vendor responses to this shape
+// so domain logic never depends on vendor-specific field names.
+export interface NormalizedQuoteResult {
+  vendorId: string;
+  itemCost: number;           // vendor production cost in cents
+  shippingCost: number;       // shipping cost in cents
+  totalLandedCost: number;    // itemCost + shippingCost
+  productionTimeDays: number;
+  deliveryEta?: string;       // ISO 8601 date string, when available
+  currency: string;           // ISO 4217, e.g. "USD"
+  rawResponse?: unknown;
+}
+
 // ---------------------------------------------------------------------------
 // Submission
 // ---------------------------------------------------------------------------
